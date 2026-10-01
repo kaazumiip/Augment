@@ -10,6 +10,46 @@ import os
 import pretty_midi
 
 
+def ensure_piano_melody_track(midi):
+    """Prepare V2's required lead without inventing notes or doubling attacks.
+
+    A validated isolated lead always wins. If unavailable, explicitly select
+    an upper detected voice at each attack cluster and move its original note
+    into the lead track. This is a fallback, not proof of song recognition.
+    """
+    midi.instruments = [track for track in midi.instruments
+                        if track.notes or
+                        'isolated melody' not in track.name.lower()]
+    existing = [track for track in midi.instruments
+                if 'isolated melody' in track.name.lower() and track.notes]
+    if existing:
+        if len(existing) > 1:
+            for track in existing[1:]:
+                existing[0].notes.extend(track.notes)
+                track.notes = []
+        return {'source': 'isolated_melody', 'notes': len(existing[0].notes),
+                'fallback': False}
+    notes = sorted((note for track in midi.instruments if not track.is_drum
+                    for note in track.notes), key=lambda n: (n.start, n.pitch))
+    if not notes:
+        raise ValueError('Solo Piano V2.2 requires usable detected notes.')
+    groups = []
+    for note in notes:
+        if groups and note.start - groups[-1][0].start <= .04:
+            groups[-1].append(note)
+        else:
+            groups.append([note])
+    chosen = {id(max(group, key=lambda n: (n.pitch, n.velocity)))
+              for group in groups}
+    lead = pretty_midi.Instrument(program=0, name='Isolated melody')
+    lead.notes = [note for note in notes if id(note) in chosen]
+    for track in midi.instruments:
+        track.notes = [note for note in track.notes if id(note) not in chosen]
+    midi.instruments.append(lead)
+    return {'source': 'detected_upper_voice_fallback', 'notes': len(lead.notes),
+            'fallback': True}
+
+
 def midi_events(path):
     if not path or not os.path.isfile(path):
         return []
@@ -277,8 +317,14 @@ def perform_pianist_v2_1(arrangement_midi_path, output_midi_path, grid):
                         if 'left hand' in track.name.lower()), None)
     right_source = next((track for track in source.instruments
                          if 'right hand support' in track.name.lower()), None)
-    if melody_source is None or left_source is None or right_source is None:
-        raise ValueError('Piano V2.1 requires the frozen V2 left/RH/melody tracks.')
+    if melody_source is None or not melody_source.notes:
+        raise ValueError('Piano V2.1 requires the frozen V2 melody track.')
+    # MIDI serialization omits genuinely empty hands. Preserve their silence;
+    # never invent accompaniment just to satisfy the track schema.
+    if left_source is None:
+        left_source = pretty_midi.Instrument(0, name='Piano left hand')
+    if right_source is None:
+        right_source = pretty_midi.Instrument(0, name='Piano right hand support')
 
     melody = sorted(melody_source.notes, key=lambda note: (note.start, note.pitch))
     phrases, current = [], []
@@ -425,6 +471,9 @@ def perform_pianist_v2_2(arrangement_midi_path, v2_1_midi_path,
     names = ('Piano left hand', 'Piano right hand support', 'Isolated melody')
     clean_tracks = {track.name: track for track in clean.instruments}
     prior_tracks = {track.name: track for track in prior.instruments}
+    for tracks in (clean_tracks, prior_tracks):
+        for name in names[:2]:
+            tracks.setdefault(name, pretty_midi.Instrument(0, name=name))
     if set(clean_tracks) != set(names) or set(prior_tracks) != set(names):
         raise ValueError('V2.2 requires identical V2 and V2.1 hand tracks.')
 

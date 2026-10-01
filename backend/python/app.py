@@ -843,6 +843,8 @@ def _find_soundfont(instrument_names=()):
         for candidate in piano_candidates:
             if candidate and os.path.isfile(candidate):
                 return candidate
+        # Do not quietly substitute General MIDI for the approved Piano voice.
+        return None
     if set(instrument_names) == {'Guitar'}:
         guitar_candidates = [
             os.environ.get('AUGMENT_GUITAR_SOUNDFONT_PATH'),
@@ -1801,15 +1803,15 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
         if audio is not None and len(audio):
             print(f'[playback] FluidSynth rendered {instrument_names} with {soundfont_path}', flush=True)
     except Exception as exc:
-        if instrument_names == {'Guitar'}:
+        if instrument_names in ({'Guitar'}, {'Piano'}):
             raise RuntimeError(
-                f'Guitar SoundFont playback failed for {soundfont_path}: {exc}'
+                f'{next(iter(instrument_names))} SoundFont playback failed for {soundfont_path}: {exc}'
             ) from exc
         print(f'[playback] FluidSynth SoundFont render unavailable, using fallback voice: {exc}')
         audio = None
     if audio is None or len(audio) == 0:
-        if instrument_names == {'Guitar'}:
-            raise RuntimeError(f'Guitar SoundFont produced no audio: {soundfont_path}')
+        if instrument_names in ({'Guitar'}, {'Piano'}):
+            raise RuntimeError(f'{next(iter(instrument_names))} SoundFont produced no audio: {soundfont_path}')
         # Keep single-part playback usable even while the SoundFont is configured.
         primary = parts[0]
         audio = _synthesize_fallback(primary['notes'], sample_rate, tempo_bpm, primary['instrument'], max_time)

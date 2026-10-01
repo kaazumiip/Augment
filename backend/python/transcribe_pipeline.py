@@ -3735,6 +3735,14 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
         if result['role'] in ('melody', 'lead'):
             band_lead_activity.extend(lead_intervals(performance))
     for result, performance, source_midi in arrangements:
+        if mode == 'solo' and result['instrument'] == 'Piano':
+            from solo_piano_arranger import ensure_piano_melody_track
+            melody_preparation = ensure_piano_melody_track(performance)
+            result['stats']['v2_2_melody_preparation'] = melody_preparation
+            if melody_preparation['fallback']:
+                warnings.append(
+                    'Piano V2.2: isolated lead unavailable; using detected '
+                    'upper-voice fallback. Melody accuracy needs review.')
         if _is_successful_bytedance_solo_piano(
                 mode, result['instrument'], result['stats']):
             # The keyboard arranger keeps notes and timing in a solo Piano
@@ -3794,11 +3802,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
             result['arrangement']['violin_v3_1'] = violin_report
             result['_preserve_violin_performance'] = True
             result['_violin_performance_plan_path'] = violin_plan_path
-        if (mode == 'solo' and result['instrument'] == 'Piano' and
-                not _is_successful_bytedance_solo_piano(
-                    mode, result['instrument'], result['stats']) and
-                any('isolated melody' in track.name.lower() and track.notes
-                    for track in performance.instruments)):
+        if mode == 'solo' and result['instrument'] == 'Piano':
             # The accepted V2 arrangement is the *notation* source. V2.1 and
             # V2.2 only perform those same notes; microtiming and pedal must
             # never leak into the engraved grand staff.
