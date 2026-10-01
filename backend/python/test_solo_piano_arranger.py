@@ -13,6 +13,33 @@ from solo_piano_arranger import (
 
 
 class SoloPianoPlanTests(unittest.TestCase):
+    def test_same_source_attack_is_not_cloned_into_both_hands(self):
+        # Different overlap-register pitches and genuine repeated onsets:
+        # no song name, absolute timestamp or pitch-specific exception.
+        for pitch in (52, 55, 58, 59):
+            with self.subTest(pitch=pitch), tempfile.TemporaryDirectory() as directory:
+                source = os.path.join(directory, 'source.mid')
+                target = os.path.join(directory, 'result.mid')
+                midi = pretty_midi.PrettyMIDI(initial_tempo=100)
+                support = pretty_midi.Instrument(0, name='Piano accompaniment')
+                support.notes = [pretty_midi.Note(63, pitch, start, start + .1)
+                                 for start in (.2, .25, 1.5)]
+                melody = pretty_midi.Instrument(0, name='Isolated melody')
+                melody.notes = [pretty_midi.Note(94, 76, 2, 2.5)]
+                midi.instruments.extend([support, melody])
+                midi.write(source)
+                stats = arrange_pianist_v2(source, target, self.grid)
+                output = pretty_midi.PrettyMIDI(target)
+                attacks = [n for t in output.instruments for n in t.notes
+                           if n.pitch == pitch]
+                self.assertEqual(len(attacks), 3)
+                self.assertEqual(stats['prevented_cross_hand_duplicates'], 3)
+                self.assertEqual([round(n.start, 2) for n in attacks], [.2, .25, 1.5])
+                self.assertTrue(all(n.velocity == 63 for n in attacks))
+                lead = next(t for t in output.instruments if t.name == 'Isolated melody')
+                self.assertEqual(len(lead.notes), 1)
+                self.assertEqual(lead.notes[0].pitch, 76)
+
     def test_missing_lead_never_fabricates_highest_note_melody(self):
         midi = pretty_midi.PrettyMIDI()
         track = pretty_midi.Instrument(0, name='Detected Piano')

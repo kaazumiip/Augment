@@ -189,6 +189,7 @@ def arrange_pianist_v2(baseline_midi_path, output_midi_path, grid):
     inversion_count = 0
     pattern_changes = 0
     previous_pattern = None
+    prevented_cross_hand_duplicates = 0
     for group in clusters:
         start = group[0].start
         active = active_melody(start)
@@ -223,7 +224,15 @@ def arrange_pianist_v2(baseline_midi_path, output_midi_path, grid):
         # If V1 gives only a bass source note, keep it as a legitimate sparse
         # pianist gesture rather than manufacturing a chord.
         left.extend(clone(note) for note in chosen_left)
-        right.extend(clone(note) for note in chosen_right)
+        # The fallback mid palette overlaps the LH range. A source attack can
+        # belong to both selections, but one physical key cannot be struck by
+        # both hands at the same instant. Omit only that redundant RH copy;
+        # do not select a replacement or merge nearby repeated attacks.
+        left_source_ids = {id(note) for note in chosen_left}
+        emitted_right = [note for note in chosen_right
+                         if id(note) not in left_source_ids]
+        prevented_cross_hand_duplicates += len(chosen_right) - len(emitted_right)
+        right.extend(clone(note) for note in emitted_right)
         common_tones += sum(note.pitch in previous_rh for note in chosen_right)
         if chosen_left and root_pc is not None and chosen_left[0].pitch % 12 != root_pc:
             inversion_count += 1
@@ -254,6 +263,7 @@ def arrange_pianist_v2(baseline_midi_path, output_midi_path, grid):
         'melody_notes_changed': 0,
         'melody_notes_removed': 0,
         'right_hand_note_count': len(right) + len(melody),
+        'prevented_cross_hand_duplicates': prevented_cross_hand_duplicates,
         'left_hand_note_count': len(left),
         'chord_inversions_used': inversion_count,
         'right_hand_common_tone_retentions': common_tones,
