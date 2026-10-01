@@ -1002,7 +1002,7 @@ def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
         raise ValueError(f"No confident notes detected in {audio_path}")
     if not polyphonic and not use_filtered_basic_pitch:
         midi = _monophonic(midi, preserve_attacks=preserve_attacks,
-                           preserve_releases=instrument_name == 'Flute')
+                           preserve_releases=instrument_name in {'Flute', 'Saxophone'})
     midi.write(midi_path)
     selected_note_count = sum(len(i.notes) for i in midi.instruments)
     basic_stats = {
@@ -2187,13 +2187,13 @@ def _add_musicxml_credits(xml_path, title=None, artist=None):
     tree.write(xml_path, encoding='utf-8', xml_declaration=True)
 
 
-def _flute_score_from_midi(midi_path, grid):
+def _flute_score_from_midi(midi_path, grid, instrument_name='Flute'):
     """Engrave the selected solo line without reselecting or losing attacks."""
     midi = pretty_midi.PrettyMIDI(midi_path)
     sources = sorted((n for inst in midi.instruments for n in inst.notes),
                      key=lambda n: (n.start, n.pitch))
     if not sources:
-        raise ValueError("The Flute melody has no usable notes")
+        raise ValueError(f"The {instrument_name} melody has no usable notes")
     # A finer grid is needed only when separate attacks would otherwise merge.
     subdivision = 8
     while True:
@@ -2210,7 +2210,7 @@ def _flute_score_from_midi(midi_path, grid):
                 short_durations_fit or subdivision >= 64):
             break
         if subdivision >= 64:
-            raise ValueError("Flute melody contains unresolved simultaneous attacks")
+            raise ValueError(f"{instrument_name} melody contains unresolved simultaneous attacks")
         subdivision *= 2
     step = 1.0 / subdivision
     part = stream.Part()
@@ -3034,8 +3034,8 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
         subdivision = _band_notation_subdivision(midi_path, grid)
         score = _polyphonic_score_from_midi(midi_path, grid,
             subdivision=subdivision, preserve_duplicates=True)
-    elif name == 'Flute' and not band_mode and role in ('melody', 'lead'):
-        score = _flute_score_from_midi(midi_path, grid)
+    elif name in {'Flute', 'Saxophone'} and not band_mode and role in ('melody', 'lead'):
+        score = _flute_score_from_midi(midi_path, grid, instrument_name=name)
     elif role in ("melody", "lead", "bass") and name != 'Guitar':
         score = _solo_score_from_midi(midi_path, name, grid)
     else:

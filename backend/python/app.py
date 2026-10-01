@@ -690,7 +690,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
         return []
 
     raw.sort(key=lambda midi_note: (midi_note.start, midi_note.pitch))
-    if preserve_band_performance or instrument_name in {'Guitar', 'Flute'} or (
+    if preserve_band_performance or instrument_name in {'Guitar', 'Flute', 'Saxophone'} or (
             instrument_name == 'Piano' and preserve_piano_performance) or (
             instrument_name == 'Violin' and preserve_violin_performance):
         seconds_per_quarter = 60.0 / max(1.0, float(tempo_bpm))
@@ -1309,7 +1309,7 @@ def _saxophone_performance_plan(notes, seconds_per_beat):
     ordered = sorted(notes, key=lambda event: event['offset'])
     for index, event in enumerate(ordered):
         start = float(event['offset']) * seconds_per_beat
-        duration = max(0.10, float(event['duration']) * seconds_per_beat)
+        duration = max(1e-6, float(event['duration']) * seconds_per_beat)
         previous = ordered[index - 1] if index else None
         following = ordered[index + 1] if index + 1 < len(ordered) else None
         previous_end = ((previous['offset'] + previous['duration']) * seconds_per_beat
@@ -1326,25 +1326,21 @@ def _saxophone_performance_plan(notes, seconds_per_beat):
                           if previous and previous.get('pitches') else pitch)
         leap = abs(pitch - previous_pitch)
         rendered_duration = duration
-        if phrase_end:
-            rendered_duration = max(0.08, duration - min(0.075, duration * 0.12))
-        elif gap_after <= 0.06:
-            rendered_duration += min(0.025, max(0.0, gap_after + 0.012))
-        ghost = duration <= 0.20 and index % 7 == 4
+        # Preserve tongue attacks/rests rather than inventing index-based effects.
+        if following_start is not None:
+            rendered_duration = min(duration, max(1e-6, following_start-start))
+        ghost = False
         plan = {
-            'start': start + (0.006 if phrase_start else (index % 3) * 0.0015),
+            'start': start,
             'duration': rendered_duration,
-            'velocity_delta': (-14 if ghost else 0) +
-                              (4 if phrase_start or leap >= 7 else 0) +
-                              (-2, 1, 3, -1)[index % 4],
+            'velocity_delta': 4 if phrase_start else 0,
             'phrase_start': phrase_start,
             'phrase_end': phrase_end,
             'ghost': ghost,
-            'vibrato': (rendered_duration >= 0.48 and not phrase_start and
-                        (index + pitch) % 3 != 0),
-            'scoop': (phrase_start and rendered_duration >= 0.24 and index % 3 != 1),
-            'fall': (phrase_end and rendered_duration >= 0.32 and index % 3 == 0),
-            'growl': (rendered_duration >= 0.48 and leap >= 7 and index % 4 == 0),
+            'vibrato': False,
+            'scoop': False,
+            'fall': False,
+            'growl': False,
             'pitch': pitch,
         }
         event['_sax_performance'] = plan
@@ -1742,6 +1738,9 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
             # simultaneous in real performance. Spread them by a few
             # milliseconds without changing the notated chord or its rhythm.
             chord_pitches = list(event['pitches'])
+            if expressive_sax:
+                # A solo saxophone cannot sound a detected chord stack.
+                chord_pitches = chord_pitches[:1]
             if instrument_name in _PLUCKED_INSTRUMENTS and len(chord_pitches) > 1:
                 chord_pitches.sort(key=pitch_to_midi)
                 chord_pitches = [
@@ -1761,7 +1760,7 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
                 # A restrained octave double gives the right-hand melody a
                 # higher, clearer presence while keeping the written score
                 # and its original melody unchanged.
-                if event.get('octave_doubling') and midi_pitch <= 84:
+                if event.get('octave_doubling') and midi_pitch <= 84 and not expressive_sax:
                     inst.notes.append(pretty_midi.Note(
                         velocity=max(30, int(event.get('velocity', 80) * 0.34)),
                         pitch=midi_pitch + 12,
@@ -2290,7 +2289,7 @@ def generate_sheet():
                         )
                     render_part = _band_playback_part(
                         part['instrument'], part.get('role'), part_notes,
-                        (None if (mode == 'band' or part['instrument'] == 'Flute' or part.get('_preserve_piano_performance') or
+                        (None if (mode == 'band' or part['instrument'] in {'Flute', 'Saxophone'} or part.get('_preserve_piano_performance') or
                                   part.get('_preserve_violin_performance')) else
                          manifest.get('tempo_map')),
                         manifest['tempo'], predicted_pedal,
@@ -2932,7 +2931,7 @@ def generate_from_youtube():
                 }
                 response_parts.append(response_part)
                 performance_midi = part_data.get('_performance_midi_path')
-                if ((requested_mode == 'band' or part_data['instrument'] == 'Flute' or part_data.get('_preserve_violin_performance')) and
+                if ((requested_mode == 'band' or part_data['instrument'] in {'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance')) and
                         performance_midi and os.path.isfile(performance_midi)):
                     part_notes = _extract_performance_notes(
                         performance_midi, part_data['instrument'],
@@ -2946,7 +2945,7 @@ def generate_from_youtube():
                 response_part['playback_events'] = part_notes
                 render_part = _band_playback_part(
                     part_data['instrument'], part_data.get('role'), part_notes,
-                    (None if requested_mode == 'band' or part_data['instrument'] == 'Flute' or part_data.get('_preserve_violin_performance') else
+                    (None if requested_mode == 'band' or part_data['instrument'] in {'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') else
                      manifest.get('tempo_map')), manifest['tempo'],
                 )
                 render_parts.append(render_part)
