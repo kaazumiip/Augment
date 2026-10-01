@@ -22,6 +22,14 @@ def midi_with(notes, program=73):
 
 
 class BandPerformanceTests(unittest.TestCase):
+    def test_viewer_grid_never_requires_microscopic_rest_glyphs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / 'dense.mid')
+            midi_with([(60+i%5,i*.003,i*.003+.05,80)
+                       for i in range(20)]).write(path)
+            grid = Grid(120,'4/4','C','major')
+            self.assertLessEqual(_band_notation_subdivision(path,grid),32)
+
     def test_band_repeated_attacks_survive_overlapping_releases(self):
         midi=midi_with([(72,0,.2,80),(72,.1,.3,80),(74,.2,.4,82)])
         selected=_monophonic(midi,preserve_attacks=True)
