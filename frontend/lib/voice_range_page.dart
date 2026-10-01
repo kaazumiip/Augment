@@ -29,6 +29,7 @@ class _VoiceRangePageState extends State<VoiceRangePage>
   Timer? _timer;
   bool _recording = false;
   bool _analyzing = false;
+  bool _analysisComplete = false;
   bool _showIntro = false;
   bool _restoring = true;
   int _seconds = 0;
@@ -161,6 +162,7 @@ class _VoiceRangePageState extends State<VoiceRangePage>
     setState(() {
       _recording = false;
       _analyzing = true;
+      _analysisComplete = false;
     });
     try {
       final path = await _channel.invokeMethod<String>('stop');
@@ -172,7 +174,11 @@ class _VoiceRangePageState extends State<VoiceRangePage>
         await File(path).delete();
       } catch (_) {}
       if (mounted) {
-        setState(() => _result = result);
+        setState(() {
+          _result = result;
+          _analysisComplete = true;
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         await _saveResult(result);
       }
     } catch (error) {
@@ -395,7 +401,9 @@ class _VoiceRangePageState extends State<VoiceRangePage>
                       onStart: () => setState(() => _showIntro = false),
                     )
                   : _analyzing
-                      ? const _VoiceTestAnalyzing(key: ValueKey('analyzing'))
+                      ? _VoiceTestAnalyzing(
+                          key: const ValueKey('analyzing'),
+                          complete: _analysisComplete)
                       : _result != null
                           ? _VoiceTestResult(
                               key: const ValueKey('result'),
@@ -470,7 +478,8 @@ class _VoiceTestIntro extends StatelessWidget {
 }
 
 class _VoiceTestAnalyzing extends StatefulWidget {
-  const _VoiceTestAnalyzing({super.key});
+  const _VoiceTestAnalyzing({super.key, required this.complete});
+  final bool complete;
 
   @override
   State<_VoiceTestAnalyzing> createState() => _VoiceTestAnalyzingState();
@@ -479,10 +488,20 @@ class _VoiceTestAnalyzing extends StatefulWidget {
 class _VoiceTestAnalyzingState extends State<_VoiceTestAnalyzing>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final _elapsed = Stopwatch();
+  Timer? _progressTimer;
+
+  double get _progress => widget.complete
+      ? 1
+      : .05 + .90 * (1 - math.exp(-_elapsed.elapsedMilliseconds / 18000));
 
   @override
   void initState() {
     super.initState();
+    _elapsed.start();
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (mounted) setState(() {});
+    });
     _controller = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 4200))
       ..repeat();
@@ -490,6 +509,8 @@ class _VoiceTestAnalyzingState extends State<_VoiceTestAnalyzing>
 
   @override
   void dispose() {
+    _progressTimer?.cancel();
+    _elapsed.stop();
     _controller.dispose();
     super.dispose();
   }
@@ -519,6 +540,28 @@ class _VoiceTestAnalyzingState extends State<_VoiceTestAnalyzing>
             Text('Matching your notes to a comfortable range',
                 style:
                     TextStyle(color: AppPalette.muted(context), fontSize: 13)),
+            const SizedBox(height: 22),
+            Text('${(_progress * 100).floor()}%',
+                style: const TextStyle(
+                    color: Color(0xFFD30A02),
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            SizedBox(
+                width: 230,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                      value: _progress,
+                      minHeight: 6,
+                      color: const Color(0xFFD30A02),
+                      backgroundColor:
+                          AppPalette.muted(context).withValues(alpha: .15)),
+                )),
+            const SizedBox(height: 9),
+            Text(widget.complete ? 'Analysis complete' : 'Estimated progress',
+                style:
+                    TextStyle(color: AppPalette.muted(context), fontSize: 12)),
           ]),
         ),
       );
