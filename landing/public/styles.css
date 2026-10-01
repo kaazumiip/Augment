@@ -7,7 +7,8 @@ body { margin:0; background:var(--paper); color:var(--ink); font-family:'Instrum
 .wrap { width:min(1160px,calc(100% - 40px)); margin-inline:auto; }
 .nav { height:94px; display:flex; align-items:center; justify-content:space-between; }
 .brand { color:var(--ink); text-decoration:none; display:flex; align-items:center; }
-.brand-logo { width:112px; height:72px; object-fit:contain; object-position:left center; }
+.brand .brand-logo { width:84px; height:54px; object-fit:contain; object-position:left center; }
+@media (max-width:760px) { .brand .brand-logo { width:64px; height:42px; } }
 .nav-download { color:var(--ink); font-weight:650; text-decoration:none; border-bottom:2px solid var(--red); padding-bottom:4px; }
 .hero { min-height:630px; display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:center; padding:44px 0 74px; }
 .eyebrow { color:var(--red); font:12px 'DM Mono',monospace; letter-spacing:.12em; margin:0 0 17px; }
