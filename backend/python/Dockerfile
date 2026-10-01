@@ -27,4 +27,4 @@ RUN pip install --no-cache-dir torch==2.5.1 torchaudio==2.5.1 \
 COPY *.py ./
 RUN mkdir -p uploads output soundfonts resources
 # Provide licensed sound libraries separately; they are not in the public repo.
-CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 4 --timeout 1800 app:app"]
+CMD ["sh", "-c", "python hosting_resources.py && exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 4 --timeout 1800 app:app"]

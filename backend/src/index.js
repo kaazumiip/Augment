@@ -1766,7 +1766,9 @@ app.use((error, req, res, next) => {
 });
 
 app.get('/assets/web/js/opensheetmusicdisplay.min.js', (req, res) => {
-  const jsPath = path.join(__dirname, '..', '..', 'frontend', 'assets', 'web', 'js', 'opensheetmusicdisplay.min.js');
+  const bundledJsPath = path.join(__dirname, 'public', 'opensheetmusicdisplay.min.js');
+  const jsPath = fs.existsSync(bundledJsPath) ? bundledJsPath :
+    path.join(__dirname, '..', '..', 'frontend', 'assets', 'web', 'js', 'opensheetmusicdisplay.min.js');
   if (fs.existsSync(jsPath)) {
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Cache-Control', 'public, max-age=3600');
