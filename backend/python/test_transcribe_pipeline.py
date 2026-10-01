@@ -447,7 +447,8 @@ class AccompanimentTimingTests(unittest.TestCase):
                     patch('transcribe_pipeline._transcribe_piano_bytedance',
                           side_effect=RuntimeError('checkpoint unavailable')), \
                     patch('transcribe_pipeline.transcribe_stem', side_effect=write_basic_pitch), \
-                    patch('transcribe_pipeline.validate_transcription', return_value={}), \
+                    patch('transcribe_pipeline.validate_transcription',
+                          return_value={'alignment_confidence': .7}), \
                     patch('transcribe_pipeline._recover_instrumental_sections', return_value=[]), \
                     patch('transcribe_pipeline._merge_bass_support_into_piano', return_value=1) as merge_bass, \
                     patch('transcribe_pipeline.apply_isolated_lead_to_piano', return_value=1) as apply_lead, \

@@ -1277,6 +1277,66 @@ def _add_missing_chord_bass_to_piano(arrangement_midi_path, grid):
     return len(support.notes)
 
 
+def _select_supported_piano_lead(lead_source, lead_midi_path, lead_stats, stem_dir):
+    """Keep a good primary lead; challenge weak/leaking stems for Solo Piano.
+
+    Loudness is not proof of a vocal melody. Compare alternate separated
+    contours only when the primary is poorly aligned. Never invent a lead if
+    every candidate is weak. This policy is local to Solo Piano.
+    """
+    primary_score = lead_stats.get('alignment_confidence')
+    if primary_score is not None and primary_score >= .45:
+        return lead_source, lead_stats, True
+    candidates = [{'source': os.path.basename(lead_source),
+                   'alignment_confidence': primary_score, 'accepted': False}]
+    best = None
+    temporary = []
+    try:
+        for filename in ('other.wav', 'piano.wav'):
+            source = os.path.join(stem_dir, filename)
+            if source == lead_source or not os.path.exists(source):
+                continue
+            if _audio_rms(source) < .002:
+                candidates.append({'source': filename, 'accepted': False,
+                                   'reason': 'insufficient audio activity'})
+                continue
+            target = lead_midi_path + '.' + filename + '.candidate.mid'
+            temporary.append(target)
+            try:
+                stats = transcribe_stem(source, target, polyphonic=False,
+                                       prefer_pyin=True, melody_range=(40, 96))
+                stats.update(validate_transcription(source, target))
+                confidence = stats.get('alignment_confidence')
+                accepted = (confidence is not None and confidence >= .45 and
+                            _usable_instrumental_lead(target, stats) and
+                            any(t.notes for t in pretty_midi.PrettyMIDI(target).instruments))
+                candidates.append({'source': filename,
+                                   'alignment_confidence': confidence,
+                                   'accepted': bool(accepted)})
+                if accepted and (best is None or confidence > best[0]):
+                    best = (confidence, source, target, stats)
+            except (OSError, ValueError, RuntimeError) as exc:
+                candidates.append({'source': filename, 'accepted': False,
+                                   'reason': str(exc)})
+        selection = {'policy': 'validated_piano_lead_sources',
+                     'primary_source': os.path.basename(lead_source),
+                     'candidates': candidates}
+        if best is not None:
+            _, source, target, stats = best
+            shutil.copyfile(target, lead_midi_path)
+            selection['selected_source'] = os.path.basename(source)
+            stats['source_selection'] = selection
+            return source, stats, True
+        selection['selected_source'] = None
+        lead_stats['source_selection'] = selection
+        lead_stats['rejected_as_unreliable_lead'] = True
+        return lead_source, lead_stats, False
+    finally:
+        for target in temporary:
+            if os.path.exists(target):
+                os.remove(target)
+
+
 def _usable_instrumental_lead(lead_midi_path, lead_stats):
     """Reject a low, poorly aligned accompaniment contour as a fake melody."""
     if lead_stats.get('alignment_confidence') is None:
@@ -3575,15 +3635,19 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                             plan_sources['lead_stem'] = os.path.basename(lead_source)
                         lead_validation = validate_transcription(lead_source, lead_midi_path)
                         lead_stats.update(lead_validation)
+                        lead_source, lead_stats, supported_lead = _select_supported_piano_lead(
+                            lead_source, lead_midi_path, lead_stats, stem_dir)
+                        if plan_debug:
+                            plan_sources['lead'] = midi_events(lead_midi_path) if supported_lead else []
+                            plan_sources['lead_stem'] = os.path.basename(lead_source) if supported_lead else None
                         source_is_vocal = os.path.basename(lead_source) == 'vocals.wav'
-                        if not source_is_vocal and not _usable_instrumental_lead(
-                                lead_midi_path, lead_stats):
+                        if not supported_lead or (not source_is_vocal and not _usable_instrumental_lead(
+                                lead_midi_path, lead_stats)):
                             # A quiet, low-register, poorly aligned `other`
                             # contour is accompaniment/bass leakage, not a
                             # defensible right-hand melody.
                             recovered_sections, applied_notes = [], 0
-                            lead_stats['rejected_as_low_register_accompaniment'] = True
-                            warnings.append(f'{name}/melody: rejected low-register instrumental lead candidate.')
+                            warnings.append(f'{name}/melody: no reliable lead contour; preserving source notes without guessing a protected melody.')
                         else:
                             recovered_sections = _recover_instrumental_sections(
                                 lead_midi_path, stem_dir, (40, 96))
@@ -3598,8 +3662,8 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                             'source': os.path.basename(lead_source),
                             'applied_notes': applied_notes,
                         }
-                        if lead_validation.get('warning'):
-                            warnings.append(f"{name}/melody: {lead_validation['warning']}")
+                        if lead_stats.get('warning'):
+                            warnings.append(f"{name}/melody: {lead_stats['warning']}")
                     except (OSError, ValueError, RuntimeError) as exc:
                         warnings.append(
                             f'{name}/melody: isolated lead unavailable; using full-mix top line ({exc})'
