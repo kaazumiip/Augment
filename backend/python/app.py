@@ -2021,6 +2021,7 @@ def health():
     return jsonify({'status': 'ok', 'message': 'Sheet music API is running',
                     'flute_melody_accuracy': 'flute_consensus_pitch_v1',
                     'flute_short_releases': 'source_duration_v1',
+                    'saxophone_performance': 'source_faithful_monophonic_v1',
                     'band_performance': 'source_coordinated_v1'})
 
 
