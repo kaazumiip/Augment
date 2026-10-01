@@ -690,7 +690,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
         return []
 
     raw.sort(key=lambda midi_note: (midi_note.start, midi_note.pitch))
-    if preserve_band_performance or instrument_name == 'Guitar' or (
+    if preserve_band_performance or instrument_name in {'Guitar', 'Flute'} or (
             instrument_name == 'Piano' and preserve_piano_performance) or (
             instrument_name == 'Violin' and preserve_violin_performance):
         seconds_per_quarter = 60.0 / max(1.0, float(tempo_bpm))
@@ -1506,7 +1506,9 @@ def _lead_performance_plan(instrument_name, notes, seconds_per_beat):
     ordered = sorted(enumerate(notes), key=lambda item: float(item[1]['offset']))
     for phrase_index, (event_index, event) in enumerate(ordered):
         start = float(event['offset']) * seconds_per_beat
-        duration = max(0.09, float(event['duration']) * seconds_per_beat)
+        source_duration = float(event['duration']) * seconds_per_beat
+        duration = (max(1e-6, source_duration) if instrument_name == 'Flute'
+                    else max(0.09, source_duration))
         previous = ordered[phrase_index - 1][1] if phrase_index else None
         following = (ordered[phrase_index + 1][1]
                      if phrase_index + 1 < len(ordered) else None)
@@ -1533,14 +1535,19 @@ def _lead_performance_plan(instrument_name, notes, seconds_per_beat):
         pitch = pitch_to_midi(event['pitches'][0])
         # A tiny attack displacement avoids machine-perfect repeated attacks;
         # it stays well below normal transcription/notation resolution.
-        attack_offset = 0.004 if phrase_start else ((phrase_index % 3) - 1) * 0.0015
+        attack_offset = (0.0 if instrument_name == 'Flute' else
+                         0.004 if phrase_start else ((phrase_index % 3) - 1) * 0.0015)
         following_phrase_start = following is not None and gap_after >= 0.14
         following_attack_offset = (
             0.004 if following_phrase_start else
             (((phrase_index + 1) % 3) - 1) * 0.0015
         )
         rendered_duration = duration
-        if phrase_end:
+        if instrument_name == 'Flute':
+            # A short tongue attack or a real rest must not become legato
+            # merely because the next note is nearby. Preserve MIDI releases.
+            rendered_duration = duration
+        elif phrase_end:
             rendered_duration = max(0.075, duration - min(0.055, duration * 0.10))
         elif connected:
             # A bowed transition needs a small true overlap.  The previous
@@ -2014,6 +2021,7 @@ def _safe_write_musicxml(score, output_path):
 def health():
     return jsonify({'status': 'ok', 'message': 'Sheet music API is running',
                     'flute_melody_accuracy': 'flute_consensus_pitch_v1',
+                    'flute_short_releases': 'source_duration_v1',
                     'band_performance': 'source_coordinated_v1'})
 
 
@@ -2282,7 +2290,7 @@ def generate_sheet():
                         )
                     render_part = _band_playback_part(
                         part['instrument'], part.get('role'), part_notes,
-                        (None if (mode == 'band' or part.get('_preserve_piano_performance') or
+                        (None if (mode == 'band' or part['instrument'] == 'Flute' or part.get('_preserve_piano_performance') or
                                   part.get('_preserve_violin_performance')) else
                          manifest.get('tempo_map')),
                         manifest['tempo'], predicted_pedal,
@@ -2924,7 +2932,7 @@ def generate_from_youtube():
                 }
                 response_parts.append(response_part)
                 performance_midi = part_data.get('_performance_midi_path')
-                if ((requested_mode == 'band' or part_data.get('_preserve_violin_performance')) and
+                if ((requested_mode == 'band' or part_data['instrument'] == 'Flute' or part_data.get('_preserve_violin_performance')) and
                         performance_midi and os.path.isfile(performance_midi)):
                     part_notes = _extract_performance_notes(
                         performance_midi, part_data['instrument'],
@@ -2938,7 +2946,7 @@ def generate_from_youtube():
                 response_part['playback_events'] = part_notes
                 render_part = _band_playback_part(
                     part_data['instrument'], part_data.get('role'), part_notes,
-                    (None if requested_mode == 'band' or part_data.get('_preserve_violin_performance') else
+                    (None if requested_mode == 'band' or part_data['instrument'] == 'Flute' or part_data.get('_preserve_violin_performance') else
                      manifest.get('tempo_map')), manifest['tempo'],
                 )
                 render_parts.append(render_part)

@@ -491,7 +491,7 @@ def analyze_grid(audio_path, extended_harmony=False):
     )
 
 
-def _monophonic(midi, preserve_attacks=False):
+def _monophonic(midi, preserve_attacks=False, preserve_releases=False):
     """Keep one continuous lead line without discarding overlapping onsets.
 
     Neural transcription often overlaps adjacent notes by a few milliseconds.
@@ -542,7 +542,7 @@ def _monophonic(midi, preserve_attacks=False):
         selected = min(active, key=rank)
         if (result and result[-1].pitch == selected.pitch and
                 start - result[-1].end <= 0.06 and
-                (not preserve_attacks or selected is previous_source)):
+                (not (preserve_attacks or preserve_releases) or selected is previous_source)):
             result[-1].end = end
         else:
             result.append(pretty_midi.Note(
@@ -559,7 +559,7 @@ def _monophonic(midi, preserve_attacks=False):
     # readable while avoiding artificial ties across real rests.
     for previous, following in zip(result, result[1:]):
         gap = following.start - previous.end
-        if 0 < gap <= 0.14:
+        if not preserve_releases and 0 < gap <= 0.14:
             previous.end = following.start
     solo = pretty_midi.Instrument(program=40, name="Solo melody")
     solo.notes = result
@@ -1001,7 +1001,8 @@ def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
     if notes == 0:
         raise ValueError(f"No confident notes detected in {audio_path}")
     if not polyphonic and not use_filtered_basic_pitch:
-        midi = _monophonic(midi, preserve_attacks=preserve_attacks)
+        midi = _monophonic(midi, preserve_attacks=preserve_attacks,
+                           preserve_releases=instrument_name == 'Flute')
     midi.write(midi_path)
     selected_note_count = sum(len(i.notes) for i in midi.instruments)
     basic_stats = {
@@ -2198,7 +2199,15 @@ def _flute_score_from_midi(midi_path, grid):
     while True:
         starts = [round(grid.seconds_to_quarter(n.start) * subdivision) /
                   subdivision for n in sources]
-        if all(b > a for a, b in zip(starts, starts[1:])):
+        short_durations_fit = all(
+            abs(max(1.0 / subdivision, round(
+                (grid.seconds_to_quarter(n.end) - grid.seconds_to_quarter(n.start))
+                * subdivision) / subdivision) -
+                (grid.seconds_to_quarter(n.end) - grid.seconds_to_quarter(n.start)))
+            * 60.0 / grid.bpm <= .02 for n in sources
+            if n.end - n.start < .20)
+        if all(b > a for a, b in zip(starts, starts[1:])) and (
+                short_durations_fit or subdivision >= 64):
             break
         if subdivision >= 64:
             raise ValueError("Flute melody contains unresolved simultaneous attacks")
