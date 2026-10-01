@@ -1130,7 +1130,7 @@ class _ComposerCard extends StatelessWidget {
                 Row(
                   children: [
                     for (var index = 0; index < tools.length; index++) ...[
-                      if (index > 0) const SizedBox(width: 8),
+                      if (index > 0) const SizedBox(width: 12),
                       Expanded(child: tools[index]),
                     ],
                   ],

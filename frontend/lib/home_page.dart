@@ -226,83 +226,100 @@ class _AugmentHomePageState extends State<AugmentHomePage>
     return Scaffold(
       extendBody: true,
       backgroundColor: AppPalette.page(context),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        left: false,
-        right: false,
-        child: Material(
-          color: Colors.transparent,
-          child: SizedBox(
-            height: _navBarHeight + _circleElevation + 6,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: _navBarHeight,
-                  child: AnimatedBuilder(
-                    animation: _navCurve,
-                    builder: (context, child) {
-                      return CustomPaint(
-                        size: Size(screenWidth, _navBarHeight),
-                        painter: _NavBarPainter(
-                          notchCenterX: _isNavTransitioning
-                              ? _lerpDouble(
-                                  _getNavItemCenterX(_prevIndex, screenWidth),
-                                  _getNavItemCenterX(
-                                      _selectedIndex, screenWidth),
-                                  _navCurve.value)
-                              : _getNavItemCenterX(_selectedIndex, screenWidth),
-                          notchRadius: _notchRadius,
-                          barHeight: _navBarHeight,
-                          darkMode: AppPalette.isDark(context),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Positioned(
-                  bottom: 11,
-                  left: 0,
-                  right: 0,
-                  height: _navBarHeight + _circleElevation + 6,
-                  child: SafeArea(
-                    top: false,
-                    bottom: false,
-                    left: false,
-                    right: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+      bottomNavigationBar: Stack(
+        children: [
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).viewPadding.bottom,
+            child: ColoredBox(
+                color: AppPalette.isDark(context)
+                    ? const Color(0xFF2C2C2C)
+                    : Colors.white),
+          ),
+          SafeArea(
+            top: false,
+            left: false,
+            right: false,
+            child: Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                height: _navBarHeight + _circleElevation + 6,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: _navBarHeight,
                       child: AnimatedBuilder(
                         animation: _navCurve,
                         builder: (context, child) {
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              _buildNavItem(
-                                  0, 'assets/home_highlight.png', screenWidth),
-                              _buildNavItem(
-                                  1, 'assets/community.png', screenWidth),
-                              _buildNavItem(
-                                  2, 'assets/marketplace.png', screenWidth),
-                              _buildNavItem(3, null, screenWidth,
-                                  icon: Icons.library_music_rounded),
-                              _buildNavItem(
-                                  4, 'assets/setting.png', screenWidth),
-                            ],
+                          return CustomPaint(
+                            size: Size(screenWidth, _navBarHeight),
+                            painter: _NavBarPainter(
+                              notchCenterX: _isNavTransitioning
+                                  ? _lerpDouble(
+                                      _getNavItemCenterX(
+                                          _prevIndex, screenWidth),
+                                      _getNavItemCenterX(
+                                          _selectedIndex, screenWidth),
+                                      _navCurve.value)
+                                  : _getNavItemCenterX(
+                                      _selectedIndex, screenWidth),
+                              notchRadius: _notchRadius,
+                              barHeight: _navBarHeight,
+                              darkMode: AppPalette.isDark(context),
+                            ),
                           );
                         },
                       ),
                     ),
-                  ),
+                    Positioned(
+                      bottom: 11,
+                      left: 0,
+                      right: 0,
+                      height: _navBarHeight + _circleElevation + 6,
+                      child: SafeArea(
+                        top: false,
+                        bottom: false,
+                        left: false,
+                        right: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                          child: AnimatedBuilder(
+                            animation: _navCurve,
+                            builder: (context, child) {
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  _buildNavItem(0, 'assets/home_highlight.png',
+                                      screenWidth),
+                                  _buildNavItem(
+                                      1, 'assets/community.png', screenWidth),
+                                  _buildNavItem(
+                                      2, 'assets/marketplace.png', screenWidth),
+                                  _buildNavItem(3, null, screenWidth,
+                                      icon: Icons.library_music_rounded),
+                                  _buildNavItem(
+                                      4, 'assets/setting.png', screenWidth),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
       body: SafeArea(
         bottom: false,
@@ -1847,7 +1864,9 @@ class _NavBarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final halfW = _circleSize * 0.78;
     final depth = _circleSize * 0.92;
-    final notchDepth = depth * 1.1;
+    // The selected 48px control is scaled to 1.1 and sits ~34px below
+    // the bar's top. Leave a small clearance beneath its 26.4px radius.
+    final notchDepth = _circleSize * 1.35;
 
     // Shadow path (slightly larger, offset down)
     final shadowPath = Path()
