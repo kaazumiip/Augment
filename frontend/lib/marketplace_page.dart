@@ -17,6 +17,7 @@ import 'social_service.dart';
 import 'marketplace_payment_service.dart';
 import 'marketplace_purchases_page.dart';
 import 'seller_dashboard_page.dart';
+import 'keyboard_aware_sheet.dart';
 
 const _marketplaceProducts = [
   _Product('Midnight', 'Music', '\$2.69', 'assets/band.png'),
@@ -1807,7 +1808,9 @@ class _MarketplaceCheckoutSheetState extends State<_MarketplaceCheckoutSheet> {
                   useSafeArea: true,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (_) => const _CardValidationSheet(),
+                  builder: (_) => const KeyboardAwareSheet(
+                    child: _CardValidationSheet(),
+                  ),
                 ),
               ),
             ] else ...[
@@ -2057,9 +2060,10 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
                       MediaQuery.viewInsetsOf(context).bottom -
                       MediaQuery.paddingOf(context).top -
                       12)
-                  .clamp(160.0, double.infinity),
+                  .clamp(0.0, MediaQuery.sizeOf(context).height * .88),
             ),
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Center(
                   child: ConstrainedBox(
@@ -2075,11 +2079,21 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
                   const Icon(Icons.credit_card_rounded,
                       color: Color(0xFFCA000A), size: 34),
                   const SizedBox(height: 8),
-                  Text('Card payment',
-                      style: TextStyle(
-                          color: AppPalette.text(context),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w800)),
+                  Row(children: [
+                    Expanded(
+                      child: Text('Card payment',
+                          style: TextStyle(
+                              color: AppPalette.text(context),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                    IconButton(
+                      tooltip: 'Close card payment',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: AppPalette.text(context),
+                    ),
+                  ]),
                   const SizedBox(height: 5),
                   Text(
                       'Card format is checked on this device. A payment provider is required to verify or charge a bank card.',
@@ -2110,24 +2124,10 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
                         labelText: 'Visa / Mastercard number',
                         prefixIcon: _CardBrandMark(brand: _cardBrand),
                       )),
-                  LayoutBuilder(
-                      builder: (context, constraints) => Flex(
-                              direction: constraints.maxWidth < 310
-                                  ? Axis.vertical
-                                  : Axis.horizontal,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (constraints.maxWidth >= 310) ...[
-                                  Expanded(child: _expiryFields(context)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _cvcField()),
-                                ] else ...[
-                                  _expiryFields(context),
-                                  const SizedBox(height: 8),
-                                  _cvcField(),
-                                ],
-                              ])),
+                  ResponsivePaymentFields(
+                    expiry: _expiryFields(context),
+                    securityCode: _cvcField(),
+                  ),
                   if (_message != null)
                     Padding(
                         padding: const EdgeInsets.only(top: 10),

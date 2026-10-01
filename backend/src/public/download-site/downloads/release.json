@@ -1,25 +1,25 @@
 {
-  "published": "2026-10-01T06:42:24.1652294Z",
-  "version": "1.0.3",
-  "build": "4",
+  "published": "2026-10-01T08:48:17.3731985Z",
+  "version": "1.0.4",
+  "build": "5",
   "apks": {
-    "x86_64": {
-      "file": "augment-x86_64.apk",
-      "bytes": 45909282,
-      "sha256": "d62f075f77fc7f8cff2a1ae6bb58cf3db5dede824f0c7549315044874b20e524",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/d62f075f77fc7f8cff2a1ae6bb58cf3db5dede824f0c7549315044874b20e524/augment-x86_64.apk"
+    "arm64-v8a": {
+      "file": "augment-arm64-v8a.apk",
+      "bytes": 44385926,
+      "sha256": "300afd3c5d8a84f4874d85bb85b0ef214ee17304ec126884dc7075c409245e89",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/300afd3c5d8a84f4874d85bb85b0ef214ee17304ec126884dc7075c409245e89/augment-arm64-v8a.apk"
     },
     "armeabi-v7a": {
       "file": "augment-armeabi-v7a.apk",
       "bytes": 42339226,
-      "sha256": "0452caa084e26ac678130d5279a067ba00bbd7b0a2dbb7b844cfde7054879a47",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/0452caa084e26ac678130d5279a067ba00bbd7b0a2dbb7b844cfde7054879a47/augment-armeabi-v7a.apk"
+      "sha256": "fe995b7986674ccd9d6351cf329a060d2c7cbe8df613a7fd1beaf9c57b0eaa0c",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/fe995b7986674ccd9d6351cf329a060d2c7cbe8df613a7fd1beaf9c57b0eaa0c/augment-armeabi-v7a.apk"
     },
-    "arm64-v8a": {
-      "file": "augment-arm64-v8a.apk",
-      "bytes": 44385926,
-      "sha256": "04be4e4796ef0dcfacdf818165e2b4b6655d3295392badef13b572c30ac068fc",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/04be4e4796ef0dcfacdf818165e2b4b6655d3295392badef13b572c30ac068fc/augment-arm64-v8a.apk"
+    "x86_64": {
+      "file": "augment-x86_64.apk",
+      "bytes": 45909282,
+      "sha256": "fe63c25c9d3db377d792ec2cdeb05abc1c7a2442a74154c5debdcbe27092ab38",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/fe63c25c9d3db377d792ec2cdeb05abc1c7a2442a74154c5debdcbe27092ab38/augment-x86_64.apk"
     }
   }
 }

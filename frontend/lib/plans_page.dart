@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_palette.dart';
 import 'app_settings.dart';
 import 'bakong_payment_service.dart';
+import 'keyboard_aware_sheet.dart';
 
 class PlansPage extends StatelessWidget {
   const PlansPage({super.key});
@@ -1090,8 +1091,11 @@ class _KhqrCheckoutView extends StatelessWidget {
                           onPressed: () => showModalBottomSheet<void>(
                             context: context,
                             isScrollControlled: true,
+                            useSafeArea: true,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => const _PlanCardDemoSheet(),
+                            builder: (_) => const KeyboardAwareSheet(
+                              child: _PlanCardDemoSheet(),
+                            ),
                           ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: textColor,
@@ -1278,9 +1282,10 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
                       MediaQuery.viewInsetsOf(context).bottom -
                       MediaQuery.paddingOf(context).top -
                       12)
-                  .clamp(160.0, double.infinity),
+                  .clamp(0.0, MediaQuery.sizeOf(context).height * .88),
             ),
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
               child: Center(
                   child: ConstrainedBox(
@@ -1293,11 +1298,21 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
                           color: AppPalette.border(context),
                           borderRadius: BorderRadius.circular(8))),
                   const SizedBox(height: 16),
-                  Text('Card payment',
-                      style: TextStyle(
-                          color: AppPalette.text(context),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w800)),
+                  Row(children: [
+                    Expanded(
+                      child: Text('Card payment',
+                          style: TextStyle(
+                              color: AppPalette.text(context),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                    IconButton(
+                      tooltip: 'Close card payment',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: AppPalette.text(context),
+                    ),
+                  ]),
                   const SizedBox(height: 5),
                   Text(
                     'Card format is checked on this device. A payment provider is required to verify or charge a bank card.',
@@ -1326,25 +1341,10 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
                         labelText: 'Visa / Mastercard number',
                         prefixIcon: _PlanBrandMark(brand: _brand)),
                   ),
-                  LayoutBuilder(
-                      builder: (context, constraints) => Flex(
-                            direction: constraints.maxWidth < 310
-                                ? Axis.vertical
-                                : Axis.horizontal,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: constraints.maxWidth >= 310
-                                ? [
-                                    Expanded(child: _expiryFields(context)),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: _cvcField())
-                                  ]
-                                : [
-                                    _expiryFields(context),
-                                    const SizedBox(height: 8),
-                                    _cvcField()
-                                  ],
-                          )),
+                  ResponsivePaymentFields(
+                    expiry: _expiryFields(context),
+                    securityCode: _cvcField(),
+                  ),
                   if (_message != null)
                     Padding(
                         padding: const EdgeInsets.only(top: 8),

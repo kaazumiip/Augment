@@ -1017,7 +1017,6 @@ class _ComposerCard extends StatelessWidget {
       // Medium phones keep the compact one-row tool bar. Only the smallest
       // cards switch to two rows so their touch targets never get squeezed.
       final twoColumnTools = constraints.maxWidth < 300;
-      final veryCompact = constraints.maxWidth < 220;
       final horizontalPadding = compact ? 24.0 : 32.0;
       final toolWidth = ((constraints.maxWidth - horizontalPadding - 8) / 2)
           .clamp(0.0, double.infinity);
@@ -1026,7 +1025,7 @@ class _ComposerCard extends StatelessWidget {
           icon: Icons.camera_alt_rounded,
           label: 'Photo',
           compact: compact,
-          expanded: twoColumnTools,
+          expanded: true,
           grid: twoColumnTools,
           onTap: () => onChooseAction('image'),
         ),
@@ -1034,7 +1033,7 @@ class _ComposerCard extends StatelessWidget {
           icon: Icons.videocam_rounded,
           label: 'Video',
           compact: compact,
-          expanded: twoColumnTools,
+          expanded: true,
           grid: twoColumnTools,
           onTap: () => onChooseAction('video'),
         ),
@@ -1042,7 +1041,7 @@ class _ComposerCard extends StatelessWidget {
           icon: Icons.poll_rounded,
           label: 'Poll',
           compact: compact,
-          expanded: twoColumnTools,
+          expanded: true,
           grid: twoColumnTools,
           onTap: () => onChooseAction('poll'),
         ),
@@ -1050,7 +1049,7 @@ class _ComposerCard extends StatelessWidget {
           icon: Icons.graphic_eq_rounded,
           label: 'Audio',
           compact: compact,
-          expanded: twoColumnTools,
+          expanded: true,
           grid: twoColumnTools,
           onTap: () => onChooseAction('audio'),
         ),
@@ -1116,21 +1115,26 @@ class _ComposerCard extends StatelessWidget {
                 ],
               ),
               SizedBox(height: compact ? 16 : 26),
-              Wrap(
-                alignment: veryCompact
-                    ? WrapAlignment.spaceEvenly
-                    : WrapAlignment.spaceBetween,
-                spacing: compact ? 8 : 0,
-                runSpacing: 8,
-                children: twoColumnTools
-                    ? tools
-                        .map((tool) => SizedBox(
-                              width: toolWidth,
-                              child: tool,
-                            ))
-                        .toList(growable: false)
-                    : tools,
-              ),
+              if (twoColumnTools)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: tools
+                      .map((tool) => SizedBox(
+                            width: toolWidth,
+                            child: tool,
+                          ))
+                      .toList(growable: false),
+                )
+              else
+                Row(
+                  children: [
+                    for (var index = 0; index < tools.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 8),
+                      Expanded(child: tools[index]),
+                    ],
+                  ],
+                ),
             ],
           ),
         ),
@@ -1214,6 +1218,7 @@ class _ComposerTool extends StatelessWidget {
                             fontWeight: FontWeight.w600)),
                   ])
                 : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize:
                         expanded ? MainAxisSize.max : MainAxisSize.min,
                     children: [
@@ -1225,15 +1230,18 @@ class _ComposerTool extends StatelessWidget {
                         iconSize: 13,
                       ),
                       const SizedBox(width: 3),
-                      Text(
+                      Flexible(
+                          child: Text(
                         label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontFamily: SocialPage._font,
                           color: SocialPage._ink,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w500,
                         ),
-                      ),
+                      )),
                     ],
                   ),
       ),

@@ -17,7 +17,7 @@ class AppUpdatePrompt extends StatefulWidget {
 class _AppUpdatePromptState extends State<AppUpdatePrompt>
     with WidgetsBindingObserver {
   static const _build =
-      int.fromEnvironment('AUGMENT_APP_BUILD', defaultValue: 4);
+      int.fromEnvironment('AUGMENT_APP_BUILD', defaultValue: 5);
   static final _download = Uri.parse(
     'https://augment-production-f590.up.railway.app/download/',
   );

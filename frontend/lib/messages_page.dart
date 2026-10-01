@@ -489,41 +489,49 @@ class _ChatPageState extends State<ChatPage> {
     final pageSize = MediaQuery.sizeOf(context);
     final menuLeft = (buttonOffset.dx - 2).clamp(12.0, pageSize.width - 188.0);
     final menuBottom = pageSize.height - buttonOffset.dy + 18;
+    final initialKeyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     setState(() => _attachmentMenuOpen = true);
     try {
       await showGeneralDialog<void>(
         context: context,
+        requestFocus: false,
         barrierDismissible: true,
         barrierLabel: 'Close attachments',
         barrierColor: Colors.transparent,
         transitionDuration: const Duration(milliseconds: 220),
-        pageBuilder: (dialogContext, _, __) => Material(
-          color: Colors.transparent,
-          child: Stack(children: [
-            Positioned(
-              left: menuLeft,
-              bottom: menuBottom,
-              width: 176,
-              child: _AttachmentPopover(
-                onSelect: (kind) {
-                  Navigator.pop(dialogContext);
-                  _chooseAttachment(kind);
-                },
+        pageBuilder: (dialogContext, _, __) {
+          // The composer moves when the keyboard closes. Follow its new
+          // position instead of leaving the popover at its old screen offset.
+          final keyboardDelta = MediaQuery.viewInsetsOf(dialogContext).bottom -
+              initialKeyboardInset;
+          return Material(
+            color: Colors.transparent,
+            child: Stack(children: [
+              Positioned(
+                left: menuLeft,
+                bottom: menuBottom + keyboardDelta,
+                width: 176,
+                child: _AttachmentPopover(
+                  onSelect: (kind) {
+                    Navigator.pop(dialogContext);
+                    _chooseAttachment(kind);
+                  },
+                ),
               ),
-            ),
-            Positioned(
-              left: buttonOffset.dx,
-              top: buttonOffset.dy,
-              width: renderBox.size.width,
-              height: renderBox.size.height,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.pop(dialogContext),
+              Positioned(
+                left: buttonOffset.dx,
+                top: buttonOffset.dy - keyboardDelta,
+                width: renderBox.size.width,
+                height: renderBox.size.height,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.pop(dialogContext),
+                ),
               ),
-            ),
-          ]),
-        ),
+            ]),
+          );
+        },
         transitionBuilder: (_, animation, __, child) {
           final curve =
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
