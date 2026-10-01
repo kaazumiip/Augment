@@ -2149,6 +2149,41 @@ def _add_musicxml_credits(xml_path, title=None, artist=None):
     tree.write(xml_path, encoding='utf-8', xml_declaration=True)
 
 
+def _flute_score_from_midi(midi_path, grid):
+    """Engrave the selected solo line without reselecting or losing attacks."""
+    midi = pretty_midi.PrettyMIDI(midi_path)
+    sources = sorted((n for inst in midi.instruments for n in inst.notes),
+                     key=lambda n: (n.start, n.pitch))
+    if not sources:
+        raise ValueError("The Flute melody has no usable notes")
+    # A finer grid is needed only when separate attacks would otherwise merge.
+    subdivision = 8
+    while True:
+        starts = [round(grid.seconds_to_quarter(n.start) * subdivision) /
+                  subdivision for n in sources]
+        if all(b > a for a, b in zip(starts, starts[1:])):
+            break
+        if subdivision >= 64:
+            raise ValueError("Flute melody contains unresolved simultaneous attacks")
+        subdivision *= 2
+    step = 1.0 / subdivision
+    part = stream.Part()
+    for index, source in enumerate(sources):
+        start = starts[index]
+        end = max(start + step,
+                  round(grid.seconds_to_quarter(source.end) * subdivision) /
+                  subdivision)
+        if index + 1 < len(sources):
+            # Written releases may shorten for monophony; playback is untouched.
+            end = min(end, starts[index + 1])
+        written = note.Note(source.pitch, quarterLength=end - start)
+        written.volume.velocity = source.velocity
+        part.insert(start, written)
+    score = stream.Score([part])
+    score._augment_notation_subdivision = subdivision
+    return score
+
+
 def _solo_score_from_midi(midi_path, name, grid):
     """Convert seconds to beat-grid positions before notation is created."""
     midi = pretty_midi.PrettyMIDI(midi_path)
@@ -2723,9 +2758,9 @@ def _debug_notation_events(score):
                     )
 
 
-def _write_musicxml(score, path):
+def _write_musicxml(score, path, subdivision=8):
     """Write an export-safe score after final notation-generated cleanup."""
-    _sanitize_musicxml_export(score)
+    _sanitize_musicxml_export(score, subdivision=subdivision)
     _debug_notation_events(score)
     try:
         written_path = score.write('musicxml', fp=path)
@@ -2733,7 +2768,7 @@ def _write_musicxml(score, path):
         # The exporter may run another notation pass and introduce a new
         # microscopic boundary fragment. A second cleanup is deterministic
         # and preserves all events at eighth-note-or-longer resolution.
-        _sanitize_musicxml_export(score)
+        _sanitize_musicxml_export(score, subdivision=subdivision)
         written_path = score.write('musicxml', fp=path)
     _normalize_musicxml_voice_numbers(path)
     return written_path
@@ -2924,16 +2959,20 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
         score.quantize((4, 8, 16), processOffsets=True, processDurations=True, inPlace=True)
     elif is_piano:
         score = _piano_score_from_midi(midi_path, grid)
+    elif name == 'Flute' and not band_mode and role in ('melody', 'lead'):
+        score = _flute_score_from_midi(midi_path, grid)
     elif role in ("melody", "lead", "bass") and name != 'Guitar':
         score = _solo_score_from_midi(midi_path, name, grid)
     else:
         score = _polyphonic_score_from_midi(midi_path, grid)
+    notation_subdivision = getattr(score, '_augment_notation_subdivision', 8)
+    minimum_duration = 1.0 / notation_subdivision
     for el in score.recurse().notesAndRests:
-        if el.duration.quarterLength < 0.125:
-            el.duration = music21.duration.Duration(0.125)
+        if el.duration.quarterLength < minimum_duration:
+            el.duration = music21.duration.Duration(minimum_duration)
     if name != 'Drums':
         _fit_to_instrument(score, name)
-    _normalize_musicxml_durations(score)
+    _normalize_musicxml_durations(score, subdivision=notation_subdivision)
     part = score.parts[0] if score.parts else score
     if name == 'Drums':
         part.partName = 'Drums (rhythm)'
@@ -3016,7 +3055,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
     score.makeNotation(inPlace=True)
     if name == 'Guitar':
         _normalize_guitar_voice_ids(score)
-    _normalize_musicxml_durations(score)
+    _normalize_musicxml_durations(score, subdivision=notation_subdivision)
     _add_score_formatting(
         score,
         part,
@@ -3026,7 +3065,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
     )
     # A late first attack is not evidence of a pickup bar. Preserve leading
     # rests on the shared audio timeline rather than shortening measure one.
-    _write_musicxml(score, xml_path)
+    _write_musicxml(score, xml_path, subdivision=notation_subdivision)
     if name in TUNINGS:
         fingering_path = None
         if name == 'Guitar':
