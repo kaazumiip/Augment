@@ -14,6 +14,7 @@ import 'api_config.dart';
 import 'music_note_editor.dart';
 import 'sheet_name_editor.dart';
 import 'sheet_score_renderer.dart';
+import 'sheet_playback_seek_guard.dart';
 
 class MusicSheetPage extends StatefulWidget {
   final String instrumentName;
@@ -53,10 +54,15 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   InAppWebViewController? _sheetController;
   StreamSubscription<Duration>? _positionSubscription;
   bool _hasPlayed = false;
+  bool _loadingAudio = false;
   bool _isScrubbing = false;
   bool _resumeAfterScrub = false;
   bool _isSheetDragging = false;
   bool _resumeAfterSheetDrag = false;
+  Future<void>? _audioReady;
+  final _seekGuard = SheetPlaybackSeekGuard();
+  String? _preparedAudioIdentity;
+  Future<void>? _sourcePreparation;
 
   int _totalNotes = 0;
   String _instrument = '';
@@ -68,6 +74,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   String _audioFile = '';
   double _audioDuration = 8.0;
   int _tempo = 120;
+  double _playbackTempo = 120;
   String _keySignature = 'C';
   String _timeSignature = '4/4';
   String _transcriptionQuality = 'unverified';
@@ -113,7 +120,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       duration: Duration(seconds: _audioDuration.ceil().clamp(1, 600)),
     );
     if (_audioAvailable) {
-      _initAudio();
+      _audioReady = _initAudio();
     }
   }
 
@@ -167,6 +174,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     _audioFile = data['audio_file'] ?? '';
     _audioDuration = (data['audio_duration'] as num?)?.toDouble() ?? 8.0;
     _tempo = (data['tempo'] as num?)?.round() ?? 120;
+    _playbackTempo = (data['tempo'] as num?)?.toDouble() ?? 120;
     _keySignature = data['key_signature'] ?? 'C';
     _timeSignature = data['time_signature'] ?? '4/4';
     _transcriptionQuality = data['transcription_quality'] ?? 'unverified';
@@ -603,6 +611,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   Future<void> _initAudio() async {
+    _loadingAudio = true;
     _audioPlayer = AudioPlayer();
     await _audioPlayer!.setVolume(1.0);
     _positionSubscription =
@@ -632,6 +641,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           _audioAvailable = false;
         });
       }
+    } finally {
+      if (mounted) setState(() => _loadingAudio = false);
     }
   }
 
@@ -645,6 +656,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   void _togglePlay() async {
+    await _audioReady;
+    if (!mounted) return;
     if (!_audioAvailable || _audioPlayer == null) {
       _showPlaybackError(
           'This sheet has no playable audio file. Generate it again after restarting Python.');
@@ -679,7 +692,10 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       milliseconds: (_playController.value * _audioDuration * 1000).round());
 
   Future<void> _handleAudioPosition(Duration position) async {
-    if (_isScrubbing || _audioDuration <= 0) return;
+    if (!mounted || _isScrubbing || _isSheetDragging || _audioDuration <= 0) {
+      return;
+    }
+    if (!_seekGuard.accept(position, DateTime.now(), dragging: false)) return;
     final fraction =
         (position.inMilliseconds / (_audioDuration * 1000)).clamp(0.0, 1.0);
     if (mounted) {
@@ -702,7 +718,13 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       milliseconds: (safeFraction * _audioDuration * 1000).round(),
     );
     _playController.value = safeFraction;
-    await _audioPlayer?.seek(target);
+    _seekGuard.seek(target, DateTime.now());
+    try {
+      await _audioPlayer?.seek(target);
+    } catch (_) {
+      _seekGuard.clear();
+      rethrow;
+    }
     await _syncSheetCursor(target);
     if (resume && _audioPlayer != null) {
       if (_hasPlayed) {
@@ -725,9 +747,12 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   Future<void> _finishScrub(double value) async {
-    await _seekToFraction(value, resume: _resumeAfterScrub);
-    _isScrubbing = false;
-    _resumeAfterScrub = false;
+    try {
+      await _seekToFraction(value, resume: _resumeAfterScrub);
+    } finally {
+      _isScrubbing = false;
+      _resumeAfterScrub = false;
+    }
   }
 
   void _previewSheetSeek(double fraction) {
@@ -742,18 +767,21 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     if (!_audioAvailable || _isSheetDragging) return;
     _isSheetDragging = true;
     _resumeAfterSheetDrag = _isPlaying;
+    _previewSheetSeek(fraction);
     if (_isPlaying) {
       await _audioPlayer?.pause();
       if (mounted) setState(() => _isPlaying = false);
     }
-    _previewSheetSeek(fraction);
   }
 
   Future<void> _endSheetDrag(double fraction) async {
     if (!_audioAvailable) return;
-    await _seekToFraction(fraction, resume: _resumeAfterSheetDrag);
-    _isSheetDragging = false;
-    _resumeAfterSheetDrag = false;
+    try {
+      await _seekToFraction(fraction, resume: _resumeAfterSheetDrag);
+    } finally {
+      _isSheetDragging = false;
+      _resumeAfterSheetDrag = false;
+    }
   }
 
   String _formatPlaybackTime(double fraction) {
@@ -861,11 +889,27 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   Future<void> _setAudioSourceWithFallback() async {
+    if (_sourcePreparation != null) await _sourcePreparation;
+    final preparation = _prepareAudioSource();
+    _sourcePreparation = preparation;
+    try {
+      await preparation;
+    } finally {
+      if (identical(_sourcePreparation, preparation)) _sourcePreparation = null;
+    }
+  }
+
+  Future<void> _prepareAudioSource() async {
+    final identity = '$_outputFile/$_audioFile';
+    // Score loading also calls this method. Do not reset an already prepared
+    // player to zero just because the sheet finished loading.
+    if (_preparedAudioIdentity == identity) return;
     Object? lastError;
 
     for (final baseUrl in _audioBaseUrls()) {
       try {
         await _audioPlayer!.setSource(await _audioSource(baseUrl));
+        _preparedAudioIdentity = identity;
         return;
       } catch (e) {
         lastError = e;
@@ -876,6 +920,11 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   Future<void> _playAudioWithFallback([Duration? position]) async {
+    if (_preparedAudioIdentity == '$_outputFile/$_audioFile') {
+      if (position != null) await _audioPlayer!.seek(position);
+      await _audioPlayer!.resume();
+      return;
+    }
     Object? lastError;
 
     for (final baseUrl in _audioBaseUrls()) {
@@ -899,8 +948,23 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     }
     final permanentUrl = _permanentUrlFor(_audioFile);
     if (permanentUrl != null && permanentUrl.isNotEmpty) {
-      unawaited(_cacheSavedAudio(permanentUrl));
-      return UrlSource(permanentUrl);
+      // Fully prepare audio on the device for responsive seek/playback rather
+      // than starting a second network stream while caching in parallel.
+      final response = await http
+          .get(Uri.parse(permanentUrl))
+          .timeout(const Duration(minutes: 3));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Could not load saved audio (${response.statusCode}).');
+      }
+      await GeneratedSheetsStore.instance.cacheAudio(
+          outputFile: _outputFile,
+          audioFile: _audioFile,
+          bytes: response.bodyBytes);
+      final local = await GeneratedSheetsStore.instance
+          .readCachedAudioPath(_activeResult);
+      return local != null
+          ? DeviceFileSource(local)
+          : BytesSource(response.bodyBytes);
     }
     final response = await http
         .get(
@@ -912,31 +976,12 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       throw Exception(
           'Could not load generated audio (${response.statusCode}).');
     }
-    unawaited(GeneratedSheetsStore.instance.cacheAudio(
+    await GeneratedSheetsStore.instance.cacheAudio(
       outputFile: _outputFile,
       audioFile: _audioFile,
       bytes: response.bodyBytes,
-    ));
+    );
     return BytesSource(response.bodyBytes);
-  }
-
-  Future<void> _cacheSavedAudio(String url) async {
-    if (!_savedToMySheets || _outputFile.isEmpty || _audioFile.isEmpty) {
-      return;
-    }
-    try {
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(minutes: 3));
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        await GeneratedSheetsStore.instance.cacheAudio(
-          outputFile: _outputFile,
-          audioFile: _audioFile,
-          bytes: response.bodyBytes,
-        );
-      }
-    } catch (_) {
-      // Online playback remains available; a later open can retry the cache.
-    }
   }
 
   @override
@@ -1394,7 +1439,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
                     color: Colors.white, size: isSmallScreen ? 22 : 26),
               ),
               GestureDetector(
-                onTap: _togglePlay,
+                onTap: _loadingAudio ? null : _togglePlay,
                 child: Container(
                   width: isSmallScreen ? 44 : 50,
                   height: isSmallScreen ? 44 : 50,
@@ -1402,11 +1447,17 @@ class _MusicSheetPageState extends State<MusicSheetPage>
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: brandRed,
-                    size: 30,
-                  ),
+                  child: _loadingAudio
+                      ? const Padding(
+                          padding: EdgeInsets.all(13),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: brandRed),
+                        )
+                      : Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: brandRed,
+                          size: 30,
+                        ),
                 ),
               ),
               Icon(Icons.music_note,
@@ -1592,12 +1643,13 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     window.osmd = null;
     var musicXmlData = $escapedXml;
     var playbackEvents = $escapedPlaybackEvents;
-    var playbackTempo = $_tempo;
+    var playbackTempo = $_playbackTempo;
     var playbackDuration = $_audioDuration;
     var displayedEventIndex = 0;
     var cursorPositions = [];
     var lastRenderedRow = null;
     var draggingPlayhead = false;
+    var lastDragFraction = 0;
     var lastAutoScrollAt = 0;
     var currentPlaybackSeconds = ${_currentPlaybackPosition.inMilliseconds / 1000};
 
@@ -1909,6 +1961,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       var fraction = nearestCursorFraction(event.clientX, event.clientY);
       if (fraction === null) return;
       draggingPlayhead = true;
+      lastDragFraction = fraction;
       container.setPointerCapture(event.pointerId);
       event.preventDefault();
       window.flutter_inappwebview.callHandler('sheetPlayheadStart', fraction);
@@ -1918,15 +1971,20 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       var fraction = nearestCursorFraction(event.clientX, event.clientY);
       if (fraction === null) return;
       event.preventDefault();
+      lastDragFraction = fraction;
       window.flutter_inappwebview.callHandler('sheetPlayheadPreview', fraction);
     });
     container.addEventListener('pointerup', function(event) {
       if (!draggingPlayhead) return;
       draggingPlayhead = false;
       var fraction = nearestCursorFraction(event.clientX, event.clientY);
-      if (fraction !== null) {
-        window.flutter_inappwebview.callHandler('sheetPlayheadEnd', fraction);
-      }
+      window.flutter_inappwebview.callHandler('sheetPlayheadEnd',
+        fraction !== null ? fraction : lastDragFraction);
+    });
+    container.addEventListener('pointercancel', function() {
+      if (!draggingPlayhead) return;
+      draggingPlayhead = false;
+      window.flutter_inappwebview.callHandler('sheetPlayheadEnd', lastDragFraction);
     });
 
     renderOSMD(musicXmlData);

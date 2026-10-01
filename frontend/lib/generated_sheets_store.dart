@@ -519,8 +519,8 @@ class GeneratedSheetsStore extends ChangeNotifier {
           RegExp(r'<score-(partwise|timewise)\b').hasMatch(response.body)) {
         final outputFile = result['output_file']?.toString();
         if (outputFile != null && outputFile.isNotEmpty) {
-          unawaited(cacheMusicXml(
-              outputFile: outputFile, content: response.body));
+          unawaited(
+              cacheMusicXml(outputFile: outputFile, content: response.body));
         }
         return response.body;
       }
@@ -531,7 +531,20 @@ class GeneratedSheetsStore extends ChangeNotifier {
   }
 
   Future<String?> readCachedAudioPath(Map<String, dynamic> result) async {
-    final path = result['cached_audio_path']?.toString();
+    String? path = result['cached_audio_path']?.toString();
+    if (path == null || path.isEmpty) {
+      await _ensureLocalLoaded();
+      final output = result['output_file']?.toString();
+      final audio = result['audio_file']?.toString();
+      final saved = _sheets.where((sheet) =>
+          output != null &&
+          sheet.result['output_file']?.toString() == output &&
+          audio != null &&
+          sheet.result['audio_file']?.toString() == audio);
+      if (saved.isNotEmpty) {
+        path = saved.first.result['cached_audio_path']?.toString();
+      }
+    }
     if (path == null || path.isEmpty) return null;
     try {
       final file = File(path);
