@@ -11,43 +11,14 @@ import pretty_midi
 
 
 def ensure_piano_melody_track(midi):
-    """Prepare V2's required lead without inventing notes or doubling attacks.
-
-    A validated isolated lead always wins. If unavailable, explicitly select
-    an upper detected voice at each attack cluster and move its original note
-    into the lead track. This is a fallback, not proof of song recognition.
-    """
-    midi.instruments = [track for track in midi.instruments
-                        if track.notes or
-                        'isolated melody' not in track.name.lower()]
+    """Inspect existing lead evidence without manufacturing a melody track."""
     existing = [track for track in midi.instruments
                 if 'isolated melody' in track.name.lower() and track.notes]
     if existing:
-        if len(existing) > 1:
-            for track in existing[1:]:
-                existing[0].notes.extend(track.notes)
-                track.notes = []
-        return {'source': 'isolated_melody', 'notes': len(existing[0].notes),
+        return {'source': 'isolated_melody',
+                'notes': sum(len(track.notes) for track in existing),
                 'fallback': False}
-    notes = sorted((note for track in midi.instruments if not track.is_drum
-                    for note in track.notes), key=lambda n: (n.start, n.pitch))
-    if not notes:
-        raise ValueError('Solo Piano V2.2 requires usable detected notes.')
-    groups = []
-    for note in notes:
-        if groups and note.start - groups[-1][0].start <= .04:
-            groups[-1].append(note)
-        else:
-            groups.append([note])
-    chosen = {id(max(group, key=lambda n: (n.pitch, n.velocity)))
-              for group in groups}
-    lead = pretty_midi.Instrument(program=0, name='Isolated melody')
-    lead.notes = [note for note in notes if id(note) in chosen]
-    for track in midi.instruments:
-        track.notes = [note for note in track.notes if id(note) not in chosen]
-    midi.instruments.append(lead)
-    return {'source': 'detected_upper_voice_fallback', 'notes': len(lead.notes),
-            'fallback': True}
+    return {'source': 'unavailable', 'notes': 0, 'fallback': False}
 
 
 def midi_events(path):

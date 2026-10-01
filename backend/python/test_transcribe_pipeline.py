@@ -356,7 +356,7 @@ class AccompanimentTimingTests(unittest.TestCase):
         self.assertFalse(_is_successful_bytedance_solo_piano(
             'solo', 'Piano', {'method': 'basic_pitch_fallback'}))
 
-    def test_bytedance_solo_piano_now_runs_required_v2_2(self):
+    def test_bytedance_solo_piano_keeps_raw_notes_and_cc64_through_pipeline(self):
         def write_bytedance(_audio_path, midi_path):
             midi = pretty_midi.PrettyMIDI(initial_tempo=120)
             piano = pretty_midi.Instrument(program=0, name='Piano')
@@ -420,12 +420,10 @@ class AccompanimentTimingTests(unittest.TestCase):
                          for c in track.control_changes if c.number == 64]
             final_cc64 = [(c.time, c.value) for track in final.instruments
                            for c in track.control_changes if c.number == 64]
-            self.assertEqual(sorted(n[0] for n in raw_notes),
-                             sorted(n[0] for n in final_notes))
-            self.assertEqual(result['arrangement']['solo_piano_version'], '2.2')
+            self.assertEqual(raw_notes, final_notes)
+            self.assertEqual(raw_cc64, final_cc64)
+            self.assertNotIn('solo_piano_version', result['arrangement'])
             self.assertTrue(result['_preserve_piano_performance'])
-            self.assertTrue(result['stats']['v2_2_melody_preparation']['fallback'])
-            self.assertEqual(result['arrangement']['piano_v2_2']['pitch_changes'], 0)
 
     def test_bytedance_failure_retains_legacy_basic_pitch_piano_support(self):
         import soundfile as sf
@@ -465,6 +463,18 @@ class AccompanimentTimingTests(unittest.TestCase):
             self.assertNotIn('legacy_piano_support_bypassed', result['stats'])
             merge_bass.assert_called_once()
             apply_lead.assert_called_once()
+            self.assertNotIn('solo_piano_version', result['arrangement'])
+            self.assertEqual(result['arrangement']['piano_route'],
+                             'detected_performance_preserved')
+            raw = pretty_midi.PrettyMIDI(
+                os.path.splitext(result['musicxml'])[0] + '.mid')
+            final = pretty_midi.PrettyMIDI(result['_performance_midi_path'])
+            identity = lambda midi: sorted(
+                (n.pitch, n.start, n.end, n.velocity)
+                for track in midi.instruments for n in track.notes)
+            self.assertEqual(identity(raw), identity(final))
+            self.assertFalse(any('isolated melody' in track.name.lower()
+                                 for track in final.instruments))
 
     def test_solo_piano_v2_2_uses_clean_v2_score_and_expressive_midi(self):
         import soundfile as sf

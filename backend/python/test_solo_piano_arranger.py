@@ -13,7 +13,7 @@ from solo_piano_arranger import (
 
 
 class SoloPianoPlanTests(unittest.TestCase):
-    def test_missing_lead_uses_original_notes_without_duplication(self):
+    def test_missing_lead_never_fabricates_highest_note_melody(self):
         midi = pretty_midi.PrettyMIDI()
         track = pretty_midi.Instrument(0, name='Detected Piano')
         track.notes = [pretty_midi.Note(70, pitch, time, time + .4)
@@ -24,8 +24,10 @@ class SoloPianoPlanTests(unittest.TestCase):
         after = sorted((n.pitch, n.start, n.end, n.velocity)
                        for t in midi.instruments for n in t.notes)
         self.assertEqual(before, after)
-        self.assertTrue(report['fallback'])
-        self.assertEqual([n.pitch for n in midi.instruments[-1].notes], [72, 74])
+        self.assertEqual(report['source'], 'unavailable')
+        self.assertFalse(report['fallback'])
+        self.assertEqual(len(midi.instruments), 1)
+        self.assertEqual(midi.instruments[0].name, 'Detected Piano')
         self.assertFalse(ensure_piano_melody_track(midi)['fallback'])
 
     def setUp(self):
