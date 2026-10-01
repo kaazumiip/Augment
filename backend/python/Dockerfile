@@ -6,7 +6,8 @@ RUN git clone --branch 1.2.3 --depth 1 --recurse-submodules \
 RUN cmake -S /src/sfizz -B /src/sfizz/build \
     -DCMAKE_BUILD_TYPE=Release -DSFIZZ_RENDER=ON -DSFIZZ_SHARED=OFF \
     -DSFIZZ_JACK=OFF -DSFIZZ_TESTS=OFF \
-    && cmake --build /src/sfizz/build --target sfizz_render --parallel 2
+    && cmake --build /src/sfizz/build --target sfizz_render --parallel 2 \
+    && cmake --install /src/sfizz/build --component render --prefix /opt/sfizz
 
 FROM python:3.11-bookworm
 ENV PYTHONUNBUFFERED=1 QT_QPA_PLATFORM=offscreen \
@@ -16,7 +17,7 @@ ENV PYTHONUNBUFFERED=1 QT_QPA_PLATFORM=offscreen \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libfluidsynth3 libsndfile1 musescore3 lilypond fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=sfizz-build /src/sfizz/build/clients/sfizz_render /usr/local/bin/sfizz_render
+COPY --from=sfizz-build /opt/sfizz/bin/sfizz_render /usr/local/bin/sfizz_render
 WORKDIR /app
 COPY requirements.txt requirements-hosting.txt ./
 # Install CPU wheels first: no CUDA runtime is needed on this demo service.
