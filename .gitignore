@@ -1,0 +1,94 @@
+# Dependencies & Packages
+node_modules/
+.pub-cache/
+.gradle-home/
+.gradle/
+build/
+.dart_tool/
+
+# Python Virtual Environments & Caches
+backend/python/venv*/
+venv/
+venv311/
+venv312/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# User Uploads & Outputs
+backend/python/uploads/*
+!backend/python/uploads/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/python/output/*
+!backend/python/output/.gitkeep
+backend/generated/*
+!backend/generated/.gitkeep
+backend/python/demucs_output/
+
+# IDEs & System Files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs & Temp Files
+tmp/transcription-evaluation-data/
+tmp/transcription-evaluation-results/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.*.local
+
+# Private server data and credentials (never publish to GitHub)
+.env.*
+!.env.example
+**/firebase-service-account*.json
+**/*service-account*.json
+*.pem
+*.key
+*.jks
+*.keystore
+backend/data/
+backend/src/uploads/
+
+# Local tooling, design work, experiments, and build/download artifacts
+.codex*/
+design/
+flyer-work/
+AGENTS.md
+GEMINI.md
+backend/bgutil-ytdlp-pot-provider/
+backend/python/runtime/
+backend/python/*.dll
+backend/python/*.mid
+backend/python/test_*.py
+backend/python/offline_*.py
+backend/python/render_*.py
+backend/python/compare_*.py
+backend/python/*_experiment.py
+!backend/python/guitar_planning_experiment.py
+backend/python/scratch*
+backend/python/README_OFFLINE_EVALUATION.md
+frontend/test/
+landing/public/downloads/*.apk
+*.apk
+*.aab
+
+# Third-party audio libraries: provision separately after license review.
+backend/python/resources/
+backend/python/soundfonts/*.sf2
+backend/python/soundfonts/*.SF2
+backend/python/soundfonts/*.sf3

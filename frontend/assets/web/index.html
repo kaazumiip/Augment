@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sheet Music</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background: white;
+      -webkit-overflow-scrolling: touch;
+    }
+    #osmdContainer {
+      width: 100%;
+      min-height: 100%;
+      padding: 8px;
+    }
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      font-family: sans-serif;
+      color: #888;
+    }
+    #error {
+      display: none;
+      padding: 16px;
+      font-family: sans-serif;
+      color: #c00;
+      background: #fee;
+      margin: 8px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading sheet music...</div>
+  <div id="error"></div>
+  <div id="osmdContainer"></div>
+
+  <script src="./js/opensheetmusicdisplay.min.js"></script>
+  <script>
+    window.osmd = null;
+    window._musicXmlData = null;
+
+    async function renderOSMD(musicXmlData) {
+      var loadingEl = document.getElementById('loading');
+      var errorEl = document.getElementById('error');
+      var containerEl = document.getElementById('osmdContainer');
+
+      loadingEl.style.display = 'flex';
+      errorEl.style.display = 'none';
+      containerEl.innerHTML = '';
+
+      try {
+        if (!window.osmd) {
+          window.osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(containerEl, {
+            autoResize: false,
+            backend: 'svg',
+            drawTitle: false,
+            drawSubtitle: false,
+            drawComposer: false,
+            drawCredits: false,
+            drawPartNames: false,
+            drawPartAbbreviations: false,
+          });
+        }
+
+        await window.osmd.load(musicXmlData);
+        window.osmd.render();
+        loadingEl.style.display = 'none';
+      } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Error rendering sheet music: ' + err.message;
+        console.error('OSMD render error:', err);
+      }
+    }
+
+    async function loadAndRenderMusicXML(musicXmlData) {
+      window._musicXmlData = musicXmlData;
+      await renderOSMD(musicXmlData);
+    }
+
+    window.addEventListener('flutterInAppWebViewPlatformReady', async function(_) {
+      console.log('flutter_inappwebview ready');
+      try {
+        var response = await window.flutter_inappwebview.callHandler('getMusicXML');
+        var musicXmlData = response.musicXml;
+        if (musicXmlData && musicXmlData.length > 0) {
+          window._musicXmlData = musicXmlData;
+          await renderOSMD(musicXmlData);
+          window.flutter_inappwebview.callHandler('onRenderComplete', {
+            success: true,
+            message: 'Rendered successfully'
+          });
+        } else {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('error').style.display = 'block';
+          document.getElementById('error').textContent = 'No sheet music data received.';
+          window.flutter_inappwebview.callHandler('onRenderComplete', {
+            success: false,
+            message: 'No MusicXML data'
+          });
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Failed to load: ' + err.toString();
+      }
+    });
+  </script>
+</body>
+</html>

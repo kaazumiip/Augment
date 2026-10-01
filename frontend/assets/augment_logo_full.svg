@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 500" width="100%" height="100%">
+  <!-- Top Symbol: "a." -->
+  <g id="symbol_a">
+    <!-- Letter 'a' (Loop + Stem) -->
+    <path
+      fill="#000000"
+      fill-rule="evenodd"
+      d="M 62.00 178.00 C 62.00 95.00 128.00 28.00 210.00 28.00 C 292.00 28.00 358.00 95.00 358.00 178.00 L 358.00 327.00 L 312.00 327.00 L 312.00 286.00 C 286.00 315.00 249.00 328.00 210.00 328.00 C 128.00 328.00 62.00 261.00 62.00 178.00 Z M 110.00 178.00 C 110.00 234.00 155.00 280.00 210.00 280.00 C 265.00 280.00 310.00 234.00 310.00 178.00 C 310.00 122.00 265.00 76.00 210.00 76.00 C 155.00 76.00 110.00 122.00 110.00 178.00 Z"
+    />
+    <!-- Red Accent Dot -->
+    <circle cx="408.8" cy="289.5" r="26.5" fill="#BA0007" />
+  </g>
+  
+  <!-- Wordmark: "a u g m e n t" -->
+  <g id="wordmark" fill="#000000">
+    <text
+      x="240"
+      y="430"
+      font-family="Instrument Sans, sans-serif"
+      font-size="44"
+      font-weight="600"
+      letter-spacing="0.42em"
+      text-anchor="middle">augment</text>
+  </g>
+</svg>

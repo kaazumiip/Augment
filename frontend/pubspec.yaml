@@ -1,0 +1,79 @@
+name: augment_app
+description: "A premium Flutter music application home page featuring metronome, tuner, pitch detection and sheet music generation."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.2
+  http: ^1.2.0
+  file_picker: ^8.1.7
+  audioplayers: ^6.1.0
+  url_launcher: ^6.3.1
+  flutter_inappwebview: ^6.0.0
+  firebase_core: ^4.13.0
+  firebase_auth: ^6.5.7
+  google_sign_in: ^7.2.0
+  supabase_flutter: ^2.17.1
+  shared_preferences: ^2.5.5
+  video_player: ^2.9.2
+  file_saver: ^0.4.0
+  pdfx: ^2.9.2
+  path_provider: ^2.1.6
+  record: ^7.1.1
+  image: ^4.5.4
+  share_plus: ^12.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/mascot_animation/
+    - assets/saxophonist.png
+    - assets/metronome.png
+    - assets/sheet_music_preview.png
+    - assets/user.png
+    - assets/cloud.png
+    - assets/phone.png
+    - assets/augment_logo.png
+    - assets/band.png
+    - assets/solo.png
+    - assets/tuner_meter.png
+    - assets/home_highlight.png
+    - assets/community.png
+    - assets/marketplace.png
+    - assets/marketplace_banner.png
+    - assets/setting.png
+    - assets/login_record_hero.png
+    - assets/google_g_logo.png
+    - assets/tuner_guitar.png
+    - assets/audio/
+    - assets/web/index.html
+    - assets/web/js/opensheetmusicdisplay.min.js
+
+  fonts:
+    - family: Instrument Sans
+      fonts:
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+          weight: 500
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+          weight: 600
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+          weight: 700
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+          weight: 800
+        - asset: fonts/InstrumentSans-VariableFont_wdth,wght.ttf
+          weight: 900
