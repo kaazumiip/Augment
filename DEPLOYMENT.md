@@ -16,13 +16,13 @@ Mount persistent storage at `/app/data` before using payments/subscriptions:
 these currently use JSON files and must not be lost during redeployment.
 Use one Node replica: its generation queue is held in memory.
 
-## Python music service — additional work required
+## Python music service — container prepared, cloud build not yet verified
 
-The current Python service is NOT yet verified to deploy on Railway. It needs
-Python 3.11, the dependencies in `backend/python/requirements.txt`, FFmpeg,
-FluidSynth, a headless MuseScore installation, and the selected SoundFonts.
-VPO playback also needs a Linux sfizz renderer and its licensed sample library.
-The Windows runtime binaries are deliberately excluded.
+Create a second Railway service from this repository with root directory
+`backend/python`. Its Dockerfile uses Python 3.11, CPU PyTorch, Gunicorn,
+FFmpeg, FluidSynth, headless MuseScore 3, LilyPond, and sfizz_render 1.2.3.
+It uses one worker to avoid duplicated machine-learning model memory. This
+container has not yet been built or smoke-tested in Railway.
 
 Provision the existing SoundFonts and SFZ libraries separately after reviewing
 their redistribution licenses. Preserve their existing names and sample paths.
@@ -30,8 +30,20 @@ Do not substitute sounds silently. Model downloads and generated files also
 require adequate disk space. A Linux container build and a full generation
 smoke test are still required before calling this hosted deployment ready.
 
-The Python development server currently listens on port 5000. Configure the
-service networking accordingly; a production WSGI setup is recommended.
+Gunicorn binds to Railway's `PORT` (5000 locally by default). Set the Node
+service's `PYTHON_BACKEND_URL` to `http://PYTHON-SERVICE.railway.internal:PORT`,
+using the actual service name and its configured port. Do not expose Python
+publicly: its routes are intended to be called through the authenticated Node API.
+
+Mount Python persistent storage at `/app/soundfonts` and provision the existing
+SoundFonts there. VPO can live on that same volume under a `vpo` subfolder;
+set `AUGMENT_VIOLIN_VPO_SFZ_PATH` to the actual solo-violin SFZ location.
+Keep all VPO referenced relative sample paths intact. The container does not
+download private/custom sample files or change the chosen sounds automatically.
+
+Before inviting testers: verify renderer binaries, upload sound libraries,
+generate a short song, save and reopen it, and test cancellation. Check actual
+memory and billing before establishing the demo's generation allowance.
 
 ## Android release and download website
 

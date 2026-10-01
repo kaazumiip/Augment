@@ -1,0 +1,16 @@
+.env*
+venv*
+__pycache__
+*.pyc
+*.dll
+*.log
+uploads
+output
+runtime
+resources
+soundfonts
+test_*.py
+offline_*.py
+render_*.py
+compare_*.py
+scratch*
