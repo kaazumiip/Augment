@@ -13,6 +13,7 @@ import 'app_palette.dart';
 import 'api_config.dart';
 import 'music_note_editor.dart';
 import 'sheet_name_editor.dart';
+import 'sheet_score_renderer.dart';
 
 class MusicSheetPage extends StatefulWidget {
   final String instrumentName;
@@ -78,6 +79,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   String _sheetImageFile = '';
 
   String _musicXmlContent = '';
+  String? _scoreRendererUrl;
+  String? _scoreRendererError;
   bool _isLoadingMusicXml = false;
   int _sheetLoadToken = 0;
   String? _sheetLoadError;
@@ -97,6 +100,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     _savedToMySheets = widget.savedSheet != null ||
         _activeResult['remote_project_id']?.toString().isNotEmpty == true;
     _parseApiResult();
+    _loadScoreRenderer();
     final resultTitle = _activeResult['title']?.toString().trim() ?? '';
     _sheetTitle = widget.savedSheet?.title ??
         (resultTitle.isNotEmpty
@@ -110,6 +114,18 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     );
     if (_audioAvailable) {
       _initAudio();
+    }
+  }
+
+  Future<void> _loadScoreRenderer() async {
+    try {
+      final url = await SheetScoreRenderer.loadScriptUrl();
+      if (mounted) setState(() => _scoreRendererUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _scoreRendererError =
+            'Could not load the sheet viewer. Please reopen this sheet.');
+      }
     }
   }
 
@@ -1194,7 +1210,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           if (hasOutput) ...[
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: _fetchMusicXml,
+              onPressed: _loadCachedMusicXmlOrFetch,
               icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
               label: const Text(
                 'Retry',
@@ -1513,6 +1529,12 @@ class _MusicSheetPageState extends State<MusicSheetPage>
 
   Widget _buildScrollableSheet(bool isSmallScreen) {
     if (_musicXmlContent.isNotEmpty) {
+      if (_scoreRendererError != null) {
+        return Center(child: Text(_scoreRendererError!));
+      }
+      if (_scoreRendererUrl == null) {
+        return const Center(child: CircularProgressIndicator());
+      }
       final escapedXml = jsonEncode(_musicXmlContent);
       final escapedPlaybackEvents = jsonEncode(_playbackEvents);
       final darkScore = AppPalette.isDark(context);
@@ -1591,11 +1613,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
 
     async function ensureOsmd() {
       if (window.opensheetmusicdisplay) return;
-      try {
-        await loadScript('$_sheetServerUrl/assets/web/js/opensheetmusicdisplay.min.js');
-      } catch (localError) {
-        await loadScript('https://unpkg.com/opensheetmusicdisplay@1.9.9/build/opensheetmusicdisplay.min.js');
-      }
+      // Shipped inside the app: saved scores never wait for Railway or a CDN.
+      await loadScript(${jsonEncode(_scoreRendererUrl)});
       if (!window.opensheetmusicdisplay) {
         throw new Error('OpenSheetMusicDisplay did not load.');
       }
