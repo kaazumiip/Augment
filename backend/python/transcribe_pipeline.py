@@ -4020,6 +4020,21 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
         # Keep raw transcription available for comparison and future retries.
         arranged_path = os.path.splitext(source_midi)[0] + '.arranged.mid'
         performance.write(arranged_path)
+        if (mode == 'solo' and result['instrument'] == 'Flute' and
+                result['source_stem'] in ('vocals', 'vocals.wav')):
+            # Preserve the approved arrangement; correct only pitches jointly
+            # supported by the source stem's two independent detectors.
+            from solo_flute_melody_accuracy import apply_flute_melody_accuracy
+            detector_path = source_midi + '.detector.json'
+            source_stem_path = os.path.join(stem_dir, 'vocals.wav')
+            try:
+                result['stats']['flute_melody_accuracy'] = apply_flute_melody_accuracy(
+                    performance, source_stem_path, detector_path)
+                performance.write(arranged_path)
+            except (OSError, ValueError, RuntimeError) as exc:
+                result['stats']['flute_melody_accuracy'] = {
+                    'enabled': True, 'applied': False, 'warning': str(exc)}
+                warnings.append('Flute: extra melody evidence unavailable; preserving selected notes.')
         # Keep the full arranged performance separate from the engraved
         # MusicXML. Engraving deliberately merges close attacks and releases
         # to make the staff readable; audio playback must retain every note.

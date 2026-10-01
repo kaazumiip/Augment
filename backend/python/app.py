@@ -1975,7 +1975,8 @@ def _safe_write_musicxml(score, output_path):
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'message': 'Sheet music API is running'})
+    return jsonify({'status': 'ok', 'message': 'Sheet music API is running',
+                    'flute_melody_accuracy': 'flute_consensus_pitch_v1'})
 
 
 _VOICE_RANGES = [
@@ -2768,6 +2769,17 @@ def audio_to_solo_midi(audio_path, output_midi_path, instrument_name):
             candidates,
             key=lambda candidate: candidate[0] + (0.08 if candidate[3] == 'vocals' else 0.0),
         )
+        if instrument_name == 'Flute' and stem_name == 'vocals':
+            from solo_flute_melody_accuracy import apply_flute_melody_accuracy
+            selected = pretty_midi.PrettyMIDI(candidate_path)
+            try:
+                stats['flute_melody_accuracy'] = apply_flute_melody_accuracy(
+                    selected, os.path.join(stems_dir, 'vocals.wav'),
+                    candidate_path + '.detector.json')
+                selected.write(candidate_path)
+            except (OSError, ValueError, RuntimeError) as exc:
+                stats['flute_melody_accuracy'] = {
+                    'enabled': True, 'applied': False, 'warning': str(exc)}
         shutil.copy2(candidate_path, output_midi_path)
         stats['selected_stem'] = stem_name
         if confidence < 0.45:
