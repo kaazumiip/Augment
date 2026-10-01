@@ -9,6 +9,21 @@ RUN cmake -S /src/sfizz -B /src/sfizz/build \
     && cmake --build /src/sfizz/build --target sfizz_render --parallel 2 \
     && cmake --install /src/sfizz/build --component render --prefix /opt/sfizz
 
+FROM python:3.11-bookworm AS fluidsynth-build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git cmake build-essential pkg-config libglib2.0-dev libsndfile1-dev \
+    && rm -rf /var/lib/apt/lists/*
+# Match the tested local native engine, not bookworm's older 2.3.1 package.
+RUN git clone --branch v2.5.7 --depth 1 \
+    https://github.com/FluidSynth/fluidsynth.git /src/fluidsynth \
+    && cmake -S /src/fluidsynth -B /src/fluidsynth/build \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/fluidsynth \
+    -DCMAKE_INSTALL_LIBDIR=lib -Denable-alsa=OFF -Denable-jack=OFF \
+    -Denable-pulseaudio=OFF -Denable-pipewire=OFF -Denable-dbus=OFF \
+    -Denable-readline=OFF -Denable-libinstpatch=OFF \
+    && cmake --build /src/fluidsynth/build --parallel 2 \
+    && cmake --install /src/fluidsynth/build
+
 FROM python:3.11-bookworm
 ENV PYTHONUNBUFFERED=1 QT_QPA_PLATFORM=offscreen \
     MUSESCORE_PATH=/usr/bin/musescore3 \
@@ -18,6 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libfluidsynth3 libsndfile1 musescore3 lilypond fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=sfizz-build /opt/sfizz/bin/sfizz_render /usr/local/bin/sfizz_render
+COPY --from=fluidsynth-build /opt/fluidsynth/lib/libfluidsynth.so* /usr/local/lib/
+RUN ldconfig && python -c "import ctypes; f=ctypes.CDLL('libfluidsynth.so.3'); f.fluid_version_str.restype=ctypes.c_char_p; assert f.fluid_version_str()==b'2.5.7'"
 WORKDIR /app
 COPY requirements.txt requirements-hosting.txt ./
 # Install CPU wheels first: no CUDA runtime is needed on this demo service.

@@ -9,6 +9,35 @@ import tempfile
 import numpy as np
 import pretty_midi
 import soundfile as sf
+import mido
+
+
+def _bound_render_tail(midi_path, release_seconds=4.0):
+    """Keep all performance messages; delay EOT to include a finite release tail.
+
+    sfizz's default waits for absolute silence, which looping patches can fail
+    to reach. --use-eot plus a silent tail avoids that unbounded render loop.
+    This adapter writes 120 BPM MIDI, so 500000 us/beat is fixed here.
+    """
+    midi = mido.MidiFile(str(midi_path))
+    end_tick = max(sum(message.time for message in track)
+                   for track in midi.tracks)
+    tail_ticks = round(release_seconds * midi.ticks_per_beat * 2)
+    # fmidi may ignore a delayed EOT when computing playback completion.
+    # A terminal all-sound-off message makes the release interval explicit;
+    # it occurs only after every original message and four seconds of tail.
+    for index, track in enumerate(midi.tracks):
+        elapsed = sum(message.time for message in track
+                      if message.type != 'end_of_track')
+        track[:] = [message for message in track
+                    if message.type != 'end_of_track']
+        delay = end_tick + tail_ticks - elapsed
+        if index == len(midi.tracks) - 1:
+            track.append(mido.Message('control_change', channel=0,
+                                      control=120, value=0, time=delay))
+            delay = 0
+        track.append(mido.MetaMessage('end_of_track', time=delay))
+    midi.save(str(midi_path))
 
 
 def validate_vpo_sfz(sfz_path, pitches):
@@ -130,6 +159,7 @@ def render_vpo_performance(events, output_path, sfz_path, sfizz_render_path,
         midi_path = Path(temp) / 'performance.mid'
         raw_wav = Path(temp) / 'performance.wav'
         midi = events_to_vpo_midi(events, midi_path)
+        _bound_render_tail(midi_path)
         rendered = sorted(midi.instruments[0].notes,
                           key=lambda note: (note.start, note.pitch))
         planned = sorted(events, key=lambda event: (
@@ -143,7 +173,7 @@ def render_vpo_performance(events, output_path, sfz_path, sfizz_render_path,
         result = subprocess.run(
             [str(renderer), '--sfz', str(Path(sfz_path).resolve()),
              '--midi', str(midi_path), '--wav', str(raw_wav),
-             '-s', str(sample_rate)],
+             '-s', str(sample_rate), '--use-eot'],
             capture_output=True, text=True, timeout=300, check=False,
         )
         if result.returncode or not raw_wav.is_file():
