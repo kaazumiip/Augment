@@ -4,6 +4,7 @@ const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
+const { pipeline } = require('node:stream/promises');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { createKHQR } = require('@manethpak/khqr-sdk');
@@ -46,7 +47,7 @@ function scheduleGeneration(plan, work, onStart) {
     drainGenerationQueue();
   });
 }
-const generatedRoot = path.join(__dirname, '..', 'generated');
+const generatedRoot = path.join(__dirname, '..', 'data', 'generated');
 const GENERATED_TTL_MS = 6 * 60 * 60 * 1000;
 const usersFile = path.join(__dirname, '..', 'data', 'users.json');
 const paymentsFile = path.join(__dirname, '..', 'data', 'payments.json');
@@ -376,23 +377,34 @@ function rewriteArtifactNames(value, jobId) {
   return rewritten;
 }
 
-function storeArtifactsForUser(result, userId, jobId) {
+async function storeArtifactsForUser(result, userId, jobId) {
   const pythonOutput = path.join(__dirname, '..', 'python', 'output');
   const destination = path.join(generatedRoot, safePathPart(userId), jobId);
   fs.mkdirSync(destination, { recursive: true });
   const artifactNames = [...collectArtifactNames(result)];
   for (const filename of artifactNames) {
     const source = path.join(pythonOutput, filename);
-    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) continue;
-    fs.copyFileSync(source, path.join(destination, filename));
-    fs.unlinkSync(source);
-  }
-  const prefix = artifactNames.map((name) => /^([a-f0-9]{8})/i.exec(name)?.[1])
-    .find(Boolean);
-  if (prefix && fs.existsSync(pythonOutput)) {
-    for (const entry of fs.readdirSync(pythonOutput)) {
-      if (!entry.startsWith(prefix)) continue;
-      fs.rmSync(path.join(pythonOutput, entry), { recursive: true, force: true });
+    const target = path.join(destination, filename);
+    if (fs.existsSync(source) && fs.statSync(source).isFile()) {
+      fs.copyFileSync(source, target);
+      continue;
+    }
+    // Railway runs Python in a separate container. Its output directory is
+    // not Node's filesystem: transfer the actual bytes before declaring a
+    // generation complete or rewriting the filenames to user-owned paths.
+    try {
+      const response = await pythonRequest('get', `/api/sheet/download/${encodeURIComponent(filename)}`, {
+        responseType: 'stream', timeout: 180000,
+      });
+      await pipeline(response.data, fs.createWriteStream(target));
+    } catch (error) {
+      // Unavailable optional PNG/PDF artifacts are sometimes listed even
+      // when the renderer reports them unavailable. MusicXML is essential.
+      if (error.response?.status === 404 && !/\.(musicxml|xml)$/i.test(filename)) {
+        console.warn(`[Node] Optional generated artifact unavailable: ${filename}`);
+        continue;
+      }
+      throw error;
     }
   }
   return rewriteArtifactNames(result, jobId);
@@ -1586,7 +1598,7 @@ app.post('/api/sheet/generate', requireFirebaseUser, upload.single('file'), (req
           isSoloMelody: false, stage: isVideo ? 'Extracting audio from video' :
             'Separating vocals and instruments', progress: 5,
         }));
-      const storedResult = storeArtifactsForUser(response.data, req.userId, jobId);
+      const storedResult = await storeArtifactsForUser(response.data, req.userId, jobId);
       finishGeneration(req.userId, access.usage.month, true);
       succeeded = true;
       generationJobs.set(jobId, {
@@ -1658,7 +1670,7 @@ app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
           timeout: 1800000,
         }));
       const jobId = crypto.randomUUID();
-      const stored = storeArtifactsForUser(response.data, req.userId, jobId);
+      const stored = await storeArtifactsForUser(response.data, req.userId, jobId);
       finishGeneration(req.userId, access.usage.month, true);
       succeeded = true;
       return res.json(stored);
@@ -1687,7 +1699,7 @@ app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
 
     fs.unlink(filepath, () => {});
     const jobId = crypto.randomUUID();
-    const stored = storeArtifactsForUser(result.data, req.userId, jobId);
+    const stored = await storeArtifactsForUser(result.data, req.userId, jobId);
     finishGeneration(req.userId, access.usage.month, true);
     succeeded = true;
     res.json(stored);
@@ -1711,7 +1723,9 @@ app.get('/api/sheet/download/:filename', requireFirebaseUser, async (req, res) =
     if (separator > 0) {
       const jobId = safePathPart(req.params.filename.slice(0, separator));
       const filename = path.basename(req.params.filename.slice(separator + 2));
-      const filePath = path.join(generatedRoot, safePathPart(req.userId), jobId, filename);
+      const currentPath = path.join(generatedRoot, safePathPart(req.userId), jobId, filename);
+      const legacyPath = path.join(__dirname, '..', 'generated', safePathPart(req.userId), jobId, filename);
+      const filePath = fs.existsSync(currentPath) ? currentPath : legacyPath;
       if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         return res.status(404).json({ error: 'Generated file expired or was not found.' });
       }
