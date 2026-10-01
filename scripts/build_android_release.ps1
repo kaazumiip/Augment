@@ -28,7 +28,12 @@ Push-Location $flutterProject
 try {
   # This is intentionally a release build. Debug APKs must never be published
   # to the public download site.
-  flutter build apk --release --split-per-abi "--dart-define=AUGMENT_API_URL=$apiUrl"
+  $versionText = Get-Content -LiteralPath (Join-Path $flutterProject 'pubspec.yaml') -Raw
+  if ($versionText -notmatch '(?m)^version:\s*[^\s+]+\+(\d+)\s*$') {
+    throw 'App version must include a build number for update checks.'
+  }
+  $releaseBuild = $Matches[1]
+  flutter build apk --release --split-per-abi "--dart-define=AUGMENT_API_URL=$apiUrl" "--dart-define=AUGMENT_APP_BUILD=$releaseBuild"
   if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed.' }
 } finally {
   Pop-Location

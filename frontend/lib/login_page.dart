@@ -14,15 +14,18 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isRegistering = false;
   bool _rememberMe = true;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _submitting = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -187,6 +190,29 @@ class _LoginPageState extends State<LoginPage> {
                           ? 'Use at least 8 characters'
                           : null,
                     ),
+                    if (_isRegistering) ...[
+                      const SizedBox(height: 11),
+                      _label('Confirm password'),
+                      _field(
+                        controller: _confirmPasswordController,
+                        hint: 'Enter your password again',
+                        icon: _obscureConfirmPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        obscure: _obscureConfirmPassword,
+                        onIconPressed: () => setState(() =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please confirm your password';
+                          }
+                          if (value != _passwordController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -256,8 +282,16 @@ class _LoginPageState extends State<LoginPage> {
                           children: [
                             WidgetSpan(
                               child: GestureDetector(
-                                onTap: () => setState(
-                                    () => _isRegistering = !_isRegistering),
+                                onTap: _submitting
+                                    ? null
+                                    : () {
+                                        _formKey.currentState?.reset();
+                                        setState(() {
+                                          _isRegistering = !_isRegistering;
+                                          _confirmPasswordController.clear();
+                                          _obscureConfirmPassword = true;
+                                        });
+                                      },
                                 child: Text(
                                   _isRegistering ? 'Log in' : 'Sign up!',
                                   style: const TextStyle(
@@ -348,7 +382,9 @@ class _LoginPageState extends State<LoginPage> {
               const EdgeInsets.symmetric(horizontal: 13, vertical: 0),
           constraints: const BoxConstraints(minHeight: 46),
           prefixIcon: Icon(
-            obscure ? Icons.lock_outline_rounded : Icons.mail_outline_rounded,
+            onIconPressed != null
+                ? Icons.lock_outline_rounded
+                : Icons.mail_outline_rounded,
             size: 18,
             color: const Color(0xFF7E7E7E),
           ),

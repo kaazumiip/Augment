@@ -17,6 +17,7 @@ import 'vector_splash_screen.dart';
 import 'supabase_config.dart';
 import 'verification_code_page.dart';
 import 'welcome_name_page.dart';
+import 'app_update_prompt.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +95,7 @@ class AugmentApp extends StatelessWidget {
           ),
           scaffoldBackgroundColor: const Color(0xFFFFF9F5),
           fontFamily: 'Instrument Sans',
+          inputDecorationTheme: _inputFocusTheme(const Color(0xFFBA0007)),
           dialogTheme: DialogThemeData(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
@@ -136,6 +138,7 @@ class AugmentApp extends StatelessWidget {
           ),
           scaffoldBackgroundColor: Colors.black,
           fontFamily: 'Instrument Sans',
+          inputDecorationTheme: _inputFocusTheme(const Color(0xFFFF625A)),
           dialogTheme: DialogThemeData(
             backgroundColor: const Color(0xFF252525),
             shape: RoundedRectangleBorder(
@@ -185,6 +188,21 @@ class AugmentApp extends StatelessWidget {
   }
 }
 
+// InputDecorator animates this border when a field gains or loses focus.
+// Keep existing field fills/padding and custom borders intact while giving
+// borderless search bars, composers and forms an outlined focus indicator.
+InputDecorationTheme _inputFocusTheme(Color color) => InputDecorationTheme(
+      focusColor: color.withValues(alpha: .08),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: 2),
+      ),
+    );
+
 class _StartupGate extends StatefulWidget {
   const _StartupGate({required this.bootstrap, required this.onReady});
 
@@ -215,7 +233,9 @@ class _StartupGateState extends State<_StartupGate> {
           _accountRefreshStarted = true;
           unawaited(_refreshStartupAccount());
         }
-        return _PresenceReporter(child: AuthGate(onReady: widget.onReady));
+        return AppUpdatePrompt(
+          child: _PresenceReporter(child: AuthGate(onReady: widget.onReady)),
+        );
       },
     );
   }
