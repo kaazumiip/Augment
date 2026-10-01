@@ -1725,7 +1725,30 @@ app.get('/api/sheet/download/:filename', requireFirebaseUser, async (req, res) =
       const filename = path.basename(req.params.filename.slice(separator + 2));
       const currentPath = path.join(generatedRoot, safePathPart(req.userId), jobId, filename);
       const legacyPath = path.join(__dirname, '..', 'generated', safePathPart(req.userId), jobId, filename);
-      const filePath = fs.existsSync(currentPath) ? currentPath : legacyPath;
+      let filePath = fs.existsSync(currentPath) ? currentPath : legacyPath;
+      // Optional PDF export may fail while the mandatory MusicXML succeeds.
+      // Retry Python's lazy PDF exporter only after verifying ownership of
+      // the corresponding XML in this user's generated job directory.
+      if (!fs.existsSync(filePath) && path.extname(filename).toLowerCase() === '.pdf') {
+        const stem = filename.slice(0, -4);
+        const ownedXml = [currentPath, legacyPath].some((candidate) =>
+          ['.musicxml', '.xml'].some((extension) => {
+            const xmlPath = path.join(path.dirname(candidate), stem + extension);
+            return fs.existsSync(xmlPath) && fs.statSync(xmlPath).isFile();
+          }));
+        if (ownedXml) {
+          const response = await pythonRequest('get', `/api/sheet/download/${encodeURIComponent(filename)}`, {
+            responseType: 'arraybuffer', timeout: 180000,
+          });
+          const bytes = Buffer.from(response.data);
+          if (bytes.subarray(0, 5).toString() !== '%PDF-') {
+            return res.status(502).json({ error: 'PDF export did not return a valid PDF. MusicXML is still available.' });
+          }
+          filePath = currentPath;
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+          fs.writeFileSync(filePath, bytes);
+        }
+      }
       if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         return res.status(404).json({ error: 'Generated file expired or was not found.' });
       }
