@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#e21b12" />
+    <meta name="description" content="Augment turns music into playable sheets, arrangements, and a musician community." />
+    <title>Augment — Make more music</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <nav class="nav wrap" aria-label="Main navigation">
+        <a class="brand" href="#top" aria-label="Augment home">
+          <img class="brand-logo" src="assets/augment_logo.svg" alt="Augment" />
+        </a>
+        <a class="nav-download" href="#download">Download app <span aria-hidden="true">↓</span></a>
+      </nav>
+
+      <section class="hero wrap" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">MUSIC, MADE PLAYABLE</p>
+          <h1>Hear it.<br /><em>Play</em> it.</h1>
+          <p class="lede">Turn songs into playable music sheets, build solo arrangements, practise with tools, and share music with a community that understands it.</p>
+          <a class="primary-button" href="#download">Get Augment for Android <span aria-hidden="true">↓</span></a>
+          <p class="android-note">Android APK · Free to download</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="note note-a">♪</div>
+          <div class="note note-b">♫</div>
+          <div class="note note-c">♩</div>
+          <div class="mascot" aria-label="Augment's jumping music bunny mascot">
+            <img src="assets/mascot_hop.png" alt="" />
+            <span class="mascot-note one">♪</span><span class="mascot-note two">♫</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="features wrap" aria-label="Augment features">
+        <article><img class="feature-art sheet-art" src="assets/sheet_music_preview.png" alt="" /><span>01</span><h2>Generate sheets</h2><p>Upload music and turn it into a readable sheet you can save, edit, and export.</p></article>
+        <article><img class="feature-art band-art" src="assets/band.png" alt="" /><span>02</span><h2>Play it your way</h2><p>Create playable solo arrangements and hear your music with expressive instrument playback.</p></article>
+        <article><img class="feature-art community-art" src="assets/community.png" alt="" /><span>03</span><h2>Find your people</h2><p>Share posts, sheets, recordings, and ideas with musicians in the Augment community.</p></article>
+      </section>
+
+      <section class="download wrap" id="download" aria-labelledby="download-title">
+        <div class="download-copy">
+          <p class="eyebrow">ANDROID RELEASE</p>
+          <h2 id="download-title">Bring Augment<br />with you.</h2>
+          <p id="release-status" class="release-status">Checking the latest release…</p>
+        </div>
+        <div class="download-panel">
+          <div class="panel-head"><span class="android-badge">Android</span><span id="release-version">Latest release</span></div>
+          <h3>Choose your device</h3>
+          <p class="panel-help">Most modern Android phones use the recommended 64-bit download.</p>
+          <div class="apk-options">
+            <a class="apk-card recommended" data-apk="arm64-v8a" href="downloads/augment-arm64-v8a.apk" download>
+              <span class="apk-icon">↓</span><span><b>Android 64-bit</b><small>arm64-v8a · Recommended</small></span><em>Get APK</em>
+            </a>
+            <a class="apk-card" data-apk="armeabi-v7a" href="downloads/augment-armeabi-v7a.apk" download>
+              <span class="apk-icon">↓</span><span><b>Android 32-bit</b><small>armeabi-v7a · Older devices</small></span><em>Get APK</em>
+            </a>
+            <a class="apk-card" data-apk="x86_64" href="downloads/augment-x86_64.apk" download>
+              <span class="apk-icon">↓</span><span><b>Android emulator</b><small>x86_64 · Emulator only</small></span><em>Get APK</em>
+            </a>
+          </div>
+          <p class="install-note">After downloading, open the APK and allow installation from your browser if Android asks. Never install APKs from untrusted websites.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap footer"><span>© <span id="year"></span> Augment</span><a href="https://github.com/kaazumiip/Augment" target="_blank" rel="noreferrer">Project source ↗</a></footer>
+    <script src="app.js"></script>
+  </body>
+</html>

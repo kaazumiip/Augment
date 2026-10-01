@@ -7,9 +7,9 @@ Example:
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)]
   [ValidatePattern('^https://')]
-  [string]$ApiUrl
+  [string]$ApiUrl = 'https://augment-production-f590.up.railway.app',
+  [switch]$Publish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,14 +55,32 @@ foreach ($abi in $releaseFiles.Keys) {
   }
 }
 
-$version = (& flutter --version | Select-Object -First 1).Trim()
+$pubspec = Get-Content -LiteralPath (Join-Path $flutterProject 'pubspec.yaml') -Raw
+if ($pubspec -notmatch '(?m)^version:\s*([^\s+]+)(?:\+(\d+))?\s*$') {
+  throw 'Could not read app version from pubspec.yaml.'
+}
+$appVersion = $Matches[1]
+$appBuild = $Matches[2]
 $manifest = [ordered]@{
-  published = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-  version = '1.0.0'
-  build = $version
+  published = (Get-Date).ToUniversalTime().ToString('o')
+  version = $appVersion
+  build = $appBuild
   apks = $published
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $downloadDirectory 'release.json') -Encoding utf8
 
+if ($Publish) {
+  node (Join-Path $PSScriptRoot 'publish_android_downloads.cjs')
+  if ($LASTEXITCODE -ne 0) { throw 'APK publication failed.' }
+}
+
+Push-Location (Join-Path $workspace 'landing')
+try {
+  npm run build
+  if ($LASTEXITCODE -ne 0) { throw 'Landing page build failed.' }
+} finally {
+  Pop-Location
+}
+
 Write-Host "Published APKs to $downloadDirectory"
-Write-Host 'Deploy the landing folder to Vercel after reviewing the release files.'
+Write-Host 'Download website and APKs are ready in landing/dist. Deploy that folder to publish them online.'

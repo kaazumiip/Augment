@@ -86,6 +86,7 @@ frontend/test/
 landing/public/downloads/*.apk
 *.apk
 *.aab
+frontend/android/.kotlin/
 
 # Third-party audio libraries: provision separately after license review.
 backend/python/resources/

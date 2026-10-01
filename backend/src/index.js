@@ -1516,6 +1516,10 @@ const upload = multer({
   }
 });
 
+app.use('/download', express.static(path.join(__dirname, 'public', 'download-site'), {
+  setHeaders(res) { res.setHeader('Cache-Control', 'no-cache'); },
+}));
+
 app.get('/', (req, res) => {
   res.json({ message: 'API is running' });
 });
