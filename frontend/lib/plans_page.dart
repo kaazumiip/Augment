@@ -14,6 +14,7 @@ import 'app_palette.dart';
 import 'app_settings.dart';
 import 'bakong_payment_service.dart';
 import 'keyboard_aware_sheet.dart';
+import 'card_number_validation.dart';
 
 class PlansPage extends StatelessWidget {
   const PlansPage({super.key});
@@ -1104,7 +1105,7 @@ class _KhqrCheckoutView extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(14)),
                           ),
                           icon: const Icon(Icons.credit_card_rounded, size: 18),
-                          label: const Text('Visa / Mastercard demo',
+                          label: const Text('Visa / Mastercard',
                               style: TextStyle(fontWeight: FontWeight.w700)),
                         ),
                       ),
@@ -1220,31 +1221,13 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
 
   String get _digits => _number.text.replaceAll(RegExp(r'\D'), '');
   String get _expiry => '${_expiryMonth.text}/${_expiryYear.text}';
-  String get _brand => _digits.startsWith('4')
-      ? 'VISA'
-      : RegExp(r'^(5[1-5]|2[2-7])').hasMatch(_digits)
-          ? 'mastercard'
-          : 'CARD';
+  String get _brand => cardNumberBrand(_number.text);
   String get _shownNumber {
     if (_digits.isEmpty) return '•••• •••• •••• ••••';
     return '$_digits••••••••••••••••'
-        .substring(0, 16)
-        .replaceAllMapped(RegExp(r'.{4}'), (match) => '${match.group(0)} ')
+        .substring(0, _digits.length > 16 ? _digits.length : 16)
+        .replaceAllMapped(RegExp(r'.{1,4}'), (match) => '${match.group(0)} ')
         .trimRight();
-  }
-
-  bool _passesLuhn() {
-    if (_digits.length < 13 || _digits.length > 19) return false;
-    var sum = 0;
-    for (var index = 0; index < _digits.length; index++) {
-      var value = int.parse(_digits[_digits.length - 1 - index]);
-      if (index.isOdd) {
-        value *= 2;
-        if (value > 9) value -= 9;
-      }
-      sum += value;
-    }
-    return sum % 10 == 0;
   }
 
   void _check() {
@@ -1254,10 +1237,11 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
         ((2000 + int.parse(expiry.group(2)!)) > now.year ||
             ((2000 + int.parse(expiry.group(2)!)) == now.year &&
                 int.parse(expiry.group(1)!) >= now.month));
-    final validCvc = RegExp(r'^\d{3,4}$').hasMatch(_cvc.text.trim());
-    setState(() => _message = _passesLuhn() && validExpiry && validCvc
-        ? 'Card details are valid. Connect a payment provider to charge it.'
-        : 'Check the card number, expiry date, and security code.');
+    final validCvc = RegExp(r'^\d{3}$').hasMatch(_cvc.text.trim());
+    setState(() => _message =
+        isValidCardNumber(_number.text) && validExpiry && validCvc
+            ? 'Card details are valid. Connect a payment provider to charge it.'
+            : 'Check the card number, expiry date, and security code.');
   }
 
   @override
@@ -1361,7 +1345,7 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
                       style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD30A02),
                           minimumSize: const Size.fromHeight(50)),
-                      child: const Text('Continue with card')),
+                      child: const Text('Check card details')),
                 ]),
               )),
             ),
@@ -1396,7 +1380,7 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
   Widget _cvcField() => TextField(
         controller: _cvc,
         focusNode: _cvcFocus,
-        maxLength: 4,
+        maxLength: 3,
         obscureText: true,
         keyboardType: TextInputType.number,
         onChanged: (_) => setState(() {}),
@@ -1423,6 +1407,7 @@ class _PlanBrandMark extends StatelessWidget {
       return const Center(
           child: SizedBox(
               width: 29,
+              height: 16,
               child: Stack(children: [
                 Positioned(
                     left: 2,

@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'api_config.dart';
 import 'band_part.dart';
+import 'package:path_provider/path_provider.dart';
+import 'sheet_score_renderer.dart';
 
 class _GenerationJobFailed implements Exception {
   const _GenerationJobFailed(this.message);
@@ -158,25 +160,23 @@ class GenerationState extends ChangeNotifier {
       }
 
       statusText = 'Finalizing...';
-      progress = 1.0;
+      progress = .97;
       notifyListeners();
 
       if (artifactBaseUrl != null) {
         apiResult['source_base_url'] = artifactBaseUrl;
       }
 
-      statusText = 'Loading your finished sheet...';
+      statusText = 'Preparing sheet and offline playback...';
       progress = .98;
       notifyListeners();
-      // A backend response means rendering is complete, but the score page
-      // used to start a second MusicXML download after this screen closed.
-      // Fetch it while the generation screen is still visible and pass the
-      // content straight into the score page instead.
+      // Finish network preparation before handing the result to the score page.
       await _preloadCompletedMusicXml(
         apiResult,
         artifactBaseUrl,
         generationToken,
       );
+      await SheetScoreRenderer.loadScriptUrl();
 
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -184,7 +184,10 @@ class GenerationState extends ChangeNotifier {
       result = apiResult;
       isGenerating = false;
       isFinished = true;
-      statusText = 'Sheet ready!';
+      progress = 1.0;
+      statusText = apiResult['preparation_warning'] == null
+          ? 'Sheet ready!'
+          : 'Sheet generated — some files need retrying';
       notifyListeners();
     } catch (e) {
       _fail(e.toString(), generationToken);
@@ -196,7 +199,9 @@ class GenerationState extends ChangeNotifier {
     String? artifactBaseUrl,
     int generationToken,
   ) async {
-    if (artifactBaseUrl == null || artifactBaseUrl.isEmpty) return;
+    final base = artifactBaseUrl ??
+        result['source_base_url']?.toString() ??
+        _baseUrls.first;
     final targets = <Map<String, dynamic>>[result];
     for (final part in result['parts'] as List<dynamic>? ?? const []) {
       if (part is Map) targets.add(Map<String, dynamic>.from(part));
@@ -206,14 +211,61 @@ class GenerationState extends ChangeNotifier {
       final outputFile = target['output_file']?.toString();
       if (outputFile == null || outputFile.isEmpty) return;
       try {
+        final permanent = target['musicxml_url']?.toString() ?? '';
         final response = await http
             .get(
-              Uri.parse('$artifactBaseUrl/api/sheet/download/$outputFile'),
-              headers: await _headers(),
+              Uri.parse(permanent.isNotEmpty
+                  ? permanent
+                  : '$base/api/sheet/download/$outputFile'),
+              headers: permanent.isNotEmpty ? null : await _headers(),
             )
-            .timeout(const Duration(seconds: 20));
-        if (response.statusCode == 200 && response.body.length > 100) {
+            .timeout(const Duration(seconds: 40));
+        if (response.statusCode == 200 &&
+            (response.body.contains('<score-partwise') ||
+                response.body.contains('<score-timewise'))) {
           target['musicxml_content'] = response.body;
+          final audioFile = target['audio_file']?.toString() ?? '';
+          if (audioFile.isNotEmpty && target['audio_available'] != false) {
+            final directory = await getTemporaryDirectory();
+            final safeName =
+                audioFile.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+            final file = File(
+                '${directory.path}/generation_${generationToken}_$safeName');
+            final audioUrl = target['audio_url']?.toString() ?? '';
+            final client = http.Client();
+            try {
+              final request = http.Request(
+                  'GET',
+                  Uri.parse(audioUrl.isNotEmpty
+                      ? audioUrl
+                      : '$base/api/sheet/download/$audioFile'));
+              if (audioUrl.isEmpty) request.headers.addAll(await _headers());
+              final audio = await client
+                  .send(request)
+                  .timeout(const Duration(seconds: 45));
+              if (audio.statusCode != 200) {
+                throw const HttpException('Audio download failed');
+              }
+              final sink = file.openWrite();
+              try {
+                await sink.addStream(
+                    audio.stream.timeout(const Duration(seconds: 45)));
+              } finally {
+                await sink.close();
+              }
+              if (generationToken != _generationToken ||
+                  await file.length() == 0) {
+                await file.delete();
+                return;
+              }
+              target['cached_audio_path'] = file.path;
+            } catch (_) {
+              if (await file.exists()) await file.delete();
+              rethrow;
+            } finally {
+              client.close();
+            }
+          }
           // For a band result, put the enriched map back into its exact part
           // entry instead of only changing a temporary copy.
           if (!identical(target, result)) {
@@ -224,9 +276,15 @@ class GenerationState extends ChangeNotifier {
               parts[index] = target;
             }
           }
+        } else {
+          throw const FormatException(
+              'The generated score could not be downloaded');
         }
       } catch (_) {
-        // The score page retains its existing cache/network fallback.
+        // Preserve the completed generation if the connection fails. The page
+        // can retry without charging for or starting another transcription.
+        result['preparation_warning'] =
+            'Some files could not be downloaded. Reconnect to finish loading.';
       }
     }));
   }

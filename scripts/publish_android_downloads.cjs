@@ -31,10 +31,14 @@ async function request(route, options = {}) {
     const hash = crypto.createHash('sha256').update(data).digest('hex');
     if (hash !== apk.sha256) throw new Error(`APK checksum mismatch: ${abi}`);
     const object = `${hash}/${apk.file}`;
-    await request(`/object/${bucket}/${object}`, { method: 'POST', headers: {
+    const publicUrl = `${origin}/storage/v1/object/public/${bucket}/${object}`;
+    const uploaded = await fetch(publicUrl, { method: 'HEAD' });
+    if (!uploaded.ok || Number(uploaded.headers.get('content-length')) !== data.length) {
+      await request(`/object/${bucket}/${object}`, { method: 'POST', headers: {
       'Content-Type': 'application/vnd.android.package-archive', 'x-upsert': 'true',
     }, body: data });
-    apk.url = `${origin}/storage/v1/object/public/${bucket}/${object}`;
+    }
+    apk.url = publicUrl;
     console.log(`Published ${abi} APK (${data.length} bytes).`);
   }
   fs.writeFileSync(manifestPath, JSON.stringify(release, null, 2));

@@ -18,6 +18,7 @@ import 'marketplace_payment_service.dart';
 import 'marketplace_purchases_page.dart';
 import 'seller_dashboard_page.dart';
 import 'keyboard_aware_sheet.dart';
+import 'card_number_validation.dart';
 
 const _marketplaceProducts = [
   _Product('Midnight', 'Music', '\$2.69', 'assets/band.png'),
@@ -1801,8 +1802,8 @@ class _MarketplaceCheckoutSheetState extends State<_MarketplaceCheckoutSheet> {
                 icon: Icons.credit_card_rounded,
                 title: 'Credit card',
                 subtitle:
-                    'Test card details locally. This does not charge or verify a real bank card.',
-                buttonLabel: 'Test card details',
+                    'Check Visa or Mastercard details. Bank authorization is required to complete payment.',
+                buttonLabel: 'Card details',
                 onTap: () => showModalBottomSheet<void>(
                   context: context,
                   useSafeArea: true,
@@ -1994,33 +1995,17 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
   String get _expiry => '${_expiryMonth.text}/${_expiryYear.text}';
 
   String get _cardBrand {
-    if (_digits.startsWith('4')) return 'VISA';
-    if (RegExp(r'^(5[1-5]|2[2-7])').hasMatch(_digits)) return 'mastercard';
-    return 'CARD';
+    return cardNumberBrand(_number.text);
   }
 
   String get _displayNumber {
     final digits = _digits;
     if (digits.isEmpty) return '•••• •••• •••• ••••';
-    final padded = '$digits••••••••••••••••'.substring(0, 16);
+    final padded = '$digits••••••••••••••••'
+        .substring(0, digits.length > 16 ? digits.length : 16);
     return padded
-        .replaceAllMapped(RegExp(r'.{4}'), (match) => '${match.group(0)} ')
+        .replaceAllMapped(RegExp(r'.{1,4}'), (match) => '${match.group(0)} ')
         .trimRight();
-  }
-
-  bool _passesLuhn(String input) {
-    final digits = input.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 13 || digits.length > 19) return false;
-    var sum = 0;
-    for (var index = 0; index < digits.length; index++) {
-      var value = int.parse(digits[digits.length - 1 - index]);
-      if (index.isOdd) {
-        value *= 2;
-        if (value > 9) value -= 9;
-      }
-      sum += value;
-    }
-    return sum % 10 == 0;
   }
 
   void _validate() {
@@ -2030,9 +2015,9 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
         ((2000 + int.parse(expiry.group(2)!)) > now.year ||
             ((2000 + int.parse(expiry.group(2)!)) == now.year &&
                 int.parse(expiry.group(1)!) >= now.month));
-    final validCvc = RegExp(r'^\d{3,4}$').hasMatch(_cvc.text.trim());
+    final validCvc = RegExp(r'^\d{3}$').hasMatch(_cvc.text.trim());
     setState(() {
-      _message = _passesLuhn(_number.text) && validExpiry && validCvc
+      _message = isValidCardNumber(_number.text) && validExpiry && validCvc
           ? 'Card details are valid. Connect a payment provider to charge it.'
           : 'Check the card number, expiry date, and security code.';
     });
@@ -2144,7 +2129,7 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
                       style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFCA000A),
                           minimumSize: const Size.fromHeight(50)),
-                      child: const Text('Continue with card')),
+                      child: const Text('Check card details')),
                 ]),
               )),
             ),
@@ -2181,7 +2166,7 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
         focusNode: _cvcFocus,
         keyboardType: TextInputType.number,
         obscureText: true,
-        maxLength: 4,
+        maxLength: 3,
         onChanged: (_) => setState(() {}),
         decoration: const InputDecoration(labelText: 'CVC', counterText: ''),
       );
@@ -2229,6 +2214,7 @@ class _CardBrandMark extends StatelessWidget {
       return const Center(
         child: SizedBox(
           width: 29,
+          height: 16,
           child: Stack(children: [
             Positioned(
                 left: 2,
