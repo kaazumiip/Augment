@@ -1,5 +1,6 @@
 import os
 import io
+import json
 import importlib
 import uuid
 import subprocess
@@ -675,7 +676,8 @@ def _extract_notes_data(score, instrument_name=None):
 
 def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
                                preserve_piano_performance=False,
-                               preserve_violin_performance=False):
+                               preserve_violin_performance=False,
+                               preserve_band_performance=False):
     """Use every arranged MIDI note for audio, independent of engraving."""
     performance = pretty_midi.PrettyMIDI(midi_path)
     raw = [
@@ -688,7 +690,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
         return []
 
     raw.sort(key=lambda midi_note: (midi_note.start, midi_note.pitch))
-    if instrument_name == 'Guitar' or (
+    if preserve_band_performance or instrument_name == 'Guitar' or (
             instrument_name == 'Piano' and preserve_piano_performance) or (
             instrument_name == 'Violin' and preserve_violin_performance):
         seconds_per_quarter = 60.0 / max(1.0, float(tempo_bpm))
@@ -700,6 +702,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
             'preserve_guitar_performance': instrument_name == 'Guitar',
             'preserve_piano_performance': preserve_piano_performance,
             'preserve_violin_performance': preserve_violin_performance,
+            'preserve_band_performance': preserve_band_performance,
         } for item in raw]
     groups = []
     for midi_note in raw:
@@ -1681,7 +1684,8 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
             instrument_name, part['notes'], seconds_per_beat)
             if expressive_lead else {})
         for event_index, event in enumerate(part['notes']):
-            if ((instrument_name == 'Guitar' and event.get('preserve_guitar_performance')) or
+            if (event.get('preserve_band_performance') or
+                    (instrument_name == 'Guitar' and event.get('preserve_guitar_performance')) or
                     (instrument_name == 'Piano' and event.get('preserve_piano_performance'))):
                 # Canonical Guitar MIDI already contains its physical strokes,
                 # ringing durations and role dynamics. Do not re-strum it.
@@ -1841,6 +1845,32 @@ def notes_to_wav(notes_data, output_path, sample_rate=44100, tempo_bpm=120, inst
 def _render_band_part_audio(render_part, output_path, tempo_bpm):
     """Best-effort isolated playback; notation generation must remain usable."""
     try:
+        if render_part['instrument'] == 'Violin' and render_part.get('is_band'):
+            events = []
+            for event in render_part['notes']:
+                for pitch_name in event['pitches']:
+                    duration = event['duration'] * 60.0 / tempo_bpm
+                    events.append({
+                        'onset': event['offset'] * 60.0 / tempo_bpm,
+                        'duration': duration, 'pitch': pitch_to_midi(pitch_name),
+                        'velocity': event['velocity'],
+                        'articulation': 'detached' if duration < .18 else 'sustain',
+                        'expression_curve': [(0., event['velocity'] / 127.),
+                                             (1., event['velocity'] / 127.)],
+                        'vibrato_delay': None,
+                    })
+            events.sort(key=lambda e: (e['onset'], e['pitch']))
+            try:
+                with tempfile.TemporaryDirectory(prefix='augment_band_violin_') as folder:
+                    plan = os.path.join(folder, 'band_violin.json')
+                    with open(plan, 'w', encoding='utf-8') as handle:
+                        json.dump({'events': events}, handle)
+                    rendered = _render_solo_violin_vpo(plan, output_path)
+                render_part['renderer_used'] = 'VPO Performance Orchestra (sfizz)'
+                return rendered
+            except Exception as exc:
+                print(f'[band_violin] VPO unavailable; using configured SF2: {exc}', flush=True)
+        render_part['renderer_used'] = 'FluidSynth / instrument SoundFont'
         return parts_to_wav(
             [render_part], output_path, tempo_bpm=tempo_bpm)
     except Exception as exc:
@@ -1853,7 +1883,7 @@ def _mix_band_part_audio(rendered_parts, output_path, sample_rate=44100):
 
     Rendering the whole band in one FluidSynth instance forces every channel
     through one shared SoundFont.  Isolated renders let Piano keep Stein Grand,
-    Guitar keep Custom Classical Guitar, Violin keep Violin Real, and other
+    Guitar keep Custom Classical Guitar, Violin use VPO when available, and other
     instruments retain their configured voice.  This mixer only balances the
     already-rendered audio; it does not alter MIDI notes or timing.
     """
@@ -1880,7 +1910,14 @@ def _mix_band_part_audio(rendered_parts, output_path, sample_rate=44100):
             samples = samples.astype(np.float64)
         if np.issubdtype(source_dtype, np.integer):
             samples /= float(np.iinfo(source_dtype).max)
-        decoded.append((samples, role_gain.get(item.get('role', ''), 0.72)))
+        # Match perceived level without boosting quiet/noisy stems indefinitely.
+        window = max(1, int(sample_rate * .4))
+        powers = [float(np.sqrt(np.mean(samples[i:i + window] ** 2)))
+                  for i in range(0, len(samples), window) if len(samples[i:i + window])]
+        active_level = float(np.percentile(powers, 85)) if powers else 0.
+        calibration = (max(.65, min(1.25, .12 / active_level))
+                       if active_level > .01 else 1.)
+        decoded.append((samples, role_gain.get(item.get('role', ''), 0.72) * calibration))
     maximum_length = max(len(samples) for samples, _ in decoded)
     mix = np.zeros(maximum_length, dtype=np.float64)
     for samples, gain in decoded:
@@ -1976,7 +2013,8 @@ def _safe_write_musicxml(score, output_path):
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'message': 'Sheet music API is running',
-                    'flute_melody_accuracy': 'flute_consensus_pitch_v1'})
+                    'flute_melody_accuracy': 'flute_consensus_pitch_v1',
+                    'band_performance': 'source_coordinated_v1'})
 
 
 _VOICE_RANGES = [
@@ -2221,7 +2259,8 @@ def generate_sheet():
                             preserve_piano_performance=bool(
                                 part.get('_preserve_piano_performance')),
                             preserve_violin_performance=bool(
-                                part.get('_preserve_violin_performance')))
+                                part.get('_preserve_violin_performance')),
+                            preserve_band_performance=mode == 'band')
                         if part['instrument'] == 'Piano':
                             predicted_pedal = _extract_piano_pedal_events(performance_midi)
                     else:
@@ -2243,13 +2282,14 @@ def generate_sheet():
                         )
                     render_part = _band_playback_part(
                         part['instrument'], part.get('role'), part_notes,
-                        (None if (part.get('_preserve_piano_performance') or
+                        (None if (mode == 'band' or part.get('_preserve_piano_performance') or
                                   part.get('_preserve_violin_performance')) else
                          manifest.get('tempo_map')),
                         manifest['tempo'], predicted_pedal,
                     )
                     render_parts.append(render_part)
                     if mode == 'band':
+                        render_part['is_band'] = True
                         safe_part_id = secure_filename(str(part.get('id') or part['instrument']))
                         part_audio_filename = f'{unique_id}_{safe_part_id}.wav'
                         part_audio_path = os.path.join(
@@ -2259,6 +2299,7 @@ def generate_sheet():
                             part_audio_path,
                             manifest['tempo'],
                         )
+                        part['playback_renderer'] = render_part.get('renderer_used')
                         rendered_band_parts.append({
                             'path': part_audio_path,
                             'role': part.get('role', 'harmony'),
@@ -2883,11 +2924,13 @@ def generate_from_youtube():
                 }
                 response_parts.append(response_part)
                 performance_midi = part_data.get('_performance_midi_path')
-                if (part_data.get('_preserve_violin_performance') and
+                if ((requested_mode == 'band' or part_data.get('_preserve_violin_performance')) and
                         performance_midi and os.path.isfile(performance_midi)):
                     part_notes = _extract_performance_notes(
                         performance_midi, part_data['instrument'],
-                        manifest['tempo'], preserve_violin_performance=True)
+                        manifest['tempo'],
+                        preserve_violin_performance=bool(part_data.get('_preserve_violin_performance')),
+                        preserve_band_performance=requested_mode == 'band')
                 else:
                     part_score = converter.parse(target)
                     part_notes = _extract_notes_data(
@@ -2895,10 +2938,11 @@ def generate_from_youtube():
                 response_part['playback_events'] = part_notes
                 render_part = _band_playback_part(
                     part_data['instrument'], part_data.get('role'), part_notes,
-                    (None if part_data.get('_preserve_violin_performance') else
+                    (None if requested_mode == 'band' or part_data.get('_preserve_violin_performance') else
                      manifest.get('tempo_map')), manifest['tempo'],
                 )
                 render_parts.append(render_part)
+                render_part['is_band'] = requested_mode == 'band'
                 safe_part_id = secure_filename(str(
                     part_data.get('id') or part_data['instrument']))
                 part_audio_filename = f'{unique_id}_{safe_part_id}.wav'
@@ -2912,6 +2956,7 @@ def generate_from_youtube():
                     'role': part_data.get('role', 'harmony'),
                     'success': part_audio_generated,
                 })
+                response_part['playback_renderer'] = render_part.get('renderer_used')
                 response_part['audio_file'] = (
                     part_audio_filename if part_audio_generated else None)
                 response_part['audio_available'] = part_audio_generated

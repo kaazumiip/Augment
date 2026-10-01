@@ -219,16 +219,24 @@ def _tonal_candidate(profile):
     return tonic, mode, round(max(0.0, score - values[1][0]), 3)
 
 
-def _chord_candidate(profile):
+def _chord_candidate(profile, extended=False):
     """Infer a conservative major/minor triad from a local chroma profile."""
     import numpy as np
     scores = []
     total = max(float(np.sum(profile)), 1e-9)
     normalized = np.asarray(profile) / total
+    templates = [('major', (0, 4, 7)), ('minor', (0, 3, 7))]
+    if extended:
+        templates += [('dom7', (0, 4, 7, 10)), ('maj7', (0, 4, 7, 11)),
+                      ('min7', (0, 3, 7, 10)), ('sus2', (0, 2, 7)),
+                      ('sus4', (0, 5, 7)), ('dim', (0, 3, 6))]
     for root in range(12):
-        for quality, intervals in (('major', (0, 4, 7)), ('minor', (0, 3, 7))):
+        for quality, intervals in templates:
             tones = tuple((root + interval) % 12 for interval in intervals)
             score = float(sum(normalized[t] for t in tones))
+            if extended:
+                score -= .035 * max(0, len(tones) - 3)
+                score += .02 * float(normalized[root])
             scores.append((score, root, quality, tones))
     scores.sort(reverse=True)
     score, root, quality, tones = scores[0]
@@ -413,7 +421,7 @@ def _role_source_fallback(stem, stem_dir):
     return stem
 
 
-def analyze_grid(audio_path):
+def analyze_grid(audio_path, extended_harmony=False):
     """Detect a shared tempo, meter and major/minor key from the original mix."""
     import librosa
     import numpy as np
@@ -469,7 +477,7 @@ def analyze_grid(audio_path):
         local = chroma[:, left:right].mean(axis=1)
         if float(local.sum()) <= 1e-9:
             continue
-        root, quality, tones, chord_conf = _chord_candidate(local)
+        root, quality, tones, chord_conf = _chord_candidate(local, extended=extended_harmony)
         chord_sections.append({
             'start_seconds': round(float(start), 3), 'end_seconds': round(end, 3),
             'root_pc': root, 'quality': quality, 'tones': list(tones),
@@ -483,7 +491,7 @@ def analyze_grid(audio_path):
     )
 
 
-def _monophonic(midi):
+def _monophonic(midi, preserve_attacks=False):
     """Keep one continuous lead line without discarding overlapping onsets.
 
     Neural transcription often overlaps adjacent notes by a few milliseconds.
@@ -495,9 +503,31 @@ def _monophonic(midi):
         n for inst in midi.instruments for n in inst.notes
         if n.velocity >= 35 and n.end - n.start >= 0.07
     ]
+    if preserve_attacks:
+        groups = []
+        for event in sorted(candidates, key=lambda n: (n.start, n.pitch)):
+            if groups and event.start - groups[-1][0].start <= .02:
+                groups[-1].append(event)
+            else:
+                groups.append([event])
+        selected = []
+        for group in groups:
+            previous = selected[-1].pitch if selected else None
+            source = min(group, key=lambda n: (
+                abs(n.pitch - previous) > 14 if previous is not None else False,
+                -n.velocity,
+                abs(n.pitch - previous) if previous is not None else 0))
+            if selected and selected[-1].end > source.start:
+                selected[-1].end = source.start
+            selected.append(pretty_midi.Note(source.velocity, source.pitch, source.start, source.end))
+        solo = pretty_midi.Instrument(40, name='Band selected melody')
+        solo.notes = selected
+        midi.instruments = [solo]
+        return midi
     boundaries = sorted({time for n in candidates for time in (n.start, n.end)})
     result = []
     previous_pitch = None
+    previous_source = None
     for start, end in zip(boundaries, boundaries[1:]):
         if end - start < 0.025:
             continue
@@ -510,7 +540,9 @@ def _monophonic(midi):
             interval = abs(current.pitch - previous_pitch)
             return (interval > 14, interval, -current.velocity, -current.pitch)
         selected = min(active, key=rank)
-        if result and result[-1].pitch == selected.pitch and start - result[-1].end <= 0.06:
+        if (result and result[-1].pitch == selected.pitch and
+                start - result[-1].end <= 0.06 and
+                (not preserve_attacks or selected is previous_source)):
             result[-1].end = end
         else:
             result.append(pretty_midi.Note(
@@ -520,6 +552,7 @@ def _monophonic(midi):
                 end=end,
             ))
         previous_pitch = selected.pitch
+        previous_source = selected
 
     # Neural note boundaries often contain a few milliseconds of silence even
     # within one sustained phrase. Close only tiny gaps so the melody remains
@@ -901,7 +934,8 @@ def _write_detector_debug_artifact(midi_path, note_events, profile_name):
 
 def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
                     melody_range=None, harmonic_focus=False, instrument_name=None,
-                    detector_profile=None, recover_short_piano=False):
+                    detector_profile=None, recover_short_piano=False,
+                    preserve_attacks=False):
     """Basic Pitch transcription, with a confidence/no-signal guard."""
     import numpy as np
     import librosa
@@ -967,7 +1001,7 @@ def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
     if notes == 0:
         raise ValueError(f"No confident notes detected in {audio_path}")
     if not polyphonic and not use_filtered_basic_pitch:
-        midi = _monophonic(midi)
+        midi = _monophonic(midi, preserve_attacks=preserve_attacks)
     midi.write(midi_path)
     selected_note_count = sum(len(i.notes) for i in midi.instruments)
     basic_stats = {
@@ -1033,10 +1067,13 @@ def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
     return basic_stats
 
 
-def transcribe_drum_stem(audio_path, midi_path):
+def transcribe_drum_stem(audio_path, midi_path, layered=False):
     """Create a compact GM percussion track from a separated drum stem."""
     import librosa
     import numpy as np
+    if layered:
+        from band_performance import transcribe_layered_drums
+        return transcribe_layered_drums(audio_path, midi_path)
 
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
     if not len(y) or float(np.sqrt(np.mean(y * y))) < 1e-4:
@@ -2707,7 +2744,8 @@ def _sanitize_musicxml_export(score, subdivision=8):
     for event in score.recurse().notesAndRests:
         value = max(step, round(float(event.duration.quarterLength) / step) * step)
         clean_duration = music21.duration.Duration(value)
-        clean_duration.tuplets = ()
+        if subdivision % 3 != 0:
+            clean_duration.tuplets = ()
         event.duration = clean_duration
     _rebuild_meter_beams(score)
     return score
@@ -2905,19 +2943,26 @@ def _fixed_time_pitch_similarity(source, rendered):
     }
 
 
-def _polyphonic_score_from_midi(midi_path, grid):
+def _polyphonic_score_from_midi(midi_path, grid, subdivision=8, preserve_duplicates=False):
     """Preserve each detected attack and release in independent voices."""
     midi = pretty_midi.PrettyMIDI(midi_path)
     grouped = {}
     for track in midi.instruments:
         for event in track.notes:
-            start = _snap_quarter_offset(grid.seconds_to_quarter(event.start))
-            end = max(start + .125,
-                      _snap_quarter_offset(grid.seconds_to_quarter(event.end)))
-            grouped.setdefault((start, end), []).append(event)
+            start = _snap_quarter_offset(grid.seconds_to_quarter(event.start), subdivision)
+            end = max(start + 1.0 / subdivision,
+                      _snap_quarter_offset(grid.seconds_to_quarter(event.end), subdivision))
+            # Keep nearby repeated pitches in separate voices, even when
+            # quantization places their attacks at the same written offset.
+            group = grouped.setdefault((start, end), [])
+            if preserve_duplicates and any(n.pitch == event.pitch for n in group):
+                grouped.setdefault((start, end, len(grouped)), []).append(event)
+            else:
+                group.append(event)
     part = stream.Part()
     voices = []
-    for (start, end), sources in sorted(grouped.items()):
+    for identity, sources in sorted(grouped.items()):
+        start, end = identity[:2]
         pitches = sorted(set(n.pitch for n in sources))
         event = (note.Note(pitches[0], quarterLength=end-start) if len(pitches) == 1
                  else chord.Chord(pitches, quarterLength=end-start))
@@ -2934,7 +2979,24 @@ def _polyphonic_score_from_midi(midi_path, grid):
                 part.insert(event.offset, event)
         else:
             part.insert(0, voice)
-    return stream.Score([part])
+    score = stream.Score([part])
+    score._augment_notation_subdivision = subdivision
+    return score
+
+
+def _band_notation_subdivision(midi_path, grid):
+    midi = pretty_midi.PrettyMIDI(midi_path)
+    attacks = sorted({n.start for track in midi.instruments for n in track.notes})
+    quarters = [grid.seconds_to_quarter(t) for t in attacks]
+    triplet_hits = sum(abs(q - round(q * 3) / 3) < .02 and
+                       abs(q - round(q * 4) / 4) > .03 for q in quarters)
+    subdivision = 12 if triplet_hits >= max(4, len(quarters) * .25) else 8
+    while subdivision < 96 and any(
+            round(grid.seconds_to_quarter(a) * subdivision) ==
+            round(grid.seconds_to_quarter(b) * subdivision)
+            for a, b in zip(attacks, attacks[1:])):
+        subdivision *= 2
+    return subdivision
 
 
 def _normalize_guitar_voice_ids(score):
@@ -2959,6 +3021,10 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
         score.quantize((4, 8, 16), processOffsets=True, processDurations=True, inPlace=True)
     elif is_piano:
         score = _piano_score_from_midi(midi_path, grid)
+    elif band_mode and name != 'Drums':
+        subdivision = _band_notation_subdivision(midi_path, grid)
+        score = _polyphonic_score_from_midi(midi_path, grid,
+            subdivision=subdivision, preserve_duplicates=True)
     elif name == 'Flute' and not band_mode and role in ('melody', 'lead'):
         score = _flute_score_from_midi(midi_path, grid)
     elif role in ("melody", "lead", "bass") and name != 'Guitar':
@@ -3224,7 +3290,8 @@ def _band_staff_from_part(result, grid):
         slot[1] = offset + float(event.duration.quarterLength)
     for voice, _ in voices:
         destination.insert(0, voice)
-    _normalize_musicxml_durations(destination)
+    _normalize_musicxml_durations(
+        destination, subdivision=result.get('notation_subdivision', 8))
     return destination
 
 
@@ -3252,11 +3319,13 @@ def _build_band_score(results, grid, title=None, artist=None):
         )
         if staff_end < score_end:
             staff.insert(staff_end, note.Rest(quarterLength=score_end - staff_end))
-        _normalize_musicxml_durations(staff)
+        subdivision = math.lcm(*(result.get('notation_subdivision', 8) for result in results))
+        _normalize_musicxml_durations(staff, subdivision=subdivision)
         staff.makeMeasures(inPlace=True)
         staff.makeNotation(inPlace=True)
-        _normalize_musicxml_durations(staff)
+        _normalize_musicxml_durations(staff, subdivision=subdivision)
     combined = stream.Score()
+    combined._augment_notation_subdivision = subdivision
     for staff in staves:
         # Score parts are concurrent players, not sequential musical events.
         # append() advances the insertion cursor and previously placed Guitar
@@ -3622,7 +3691,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
 
     os.makedirs(output_dir, exist_ok=True)
     song = os.path.splitext(os.path.basename(audio_path))[0]
-    grid = analyze_grid(audio_path)
+    grid = analyze_grid(audio_path, extended_harmony=True) if mode == 'band' else analyze_grid(audio_path)
     if time_signature:
         try:
             validated_signature = meter.TimeSignature(str(time_signature)).ratioString
@@ -3702,7 +3771,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                 _piano_transcriber_name() == 'bytedance'
             )
             if name == 'Drums' or role == 'drums':
-                stats = transcribe_drum_stem(stem_path, midi_path)
+                stats = transcribe_drum_stem(stem_path, midi_path, layered=mode == 'band')
                 stats['source_stem'] = stem
                 stats['source_strategy'] = source_strategy
             elif solo_violin_cover:
@@ -3748,6 +3817,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                     melody_range=INSTRUMENTS.get(name, INSTRUMENTS["Violin"])[:2],
                     harmonic_focus=(name == 'Violin' and role in ('melody', 'lead')),
                     instrument_name=name,
+                    preserve_attacks=mode == 'band',
                 )
                 stats['source_stem'] = stem
                 stats['source_strategy'] = source_strategy
@@ -3994,6 +4064,19 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
         if result['role'] in ('melody', 'lead'):
             band_lead_activity.extend(lead_intervals(performance))
     for result, performance, source_midi in arrangements:
+        if mode == 'band':
+            # Arrange the detected players before ensemble balancing; the
+            # coordinator operates jointly after this preparation pass below.
+            result['arrangement'] = arrange(performance, result['instrument'],
+                result['role'], lead_activity=band_lead_activity, solo=False)
+    if mode == 'band':
+        from band_performance import coordinate_band
+        coordination = coordinate_band(arrangements)
+        for result, _, _ in arrangements:
+            result['arrangement']['ensemble'] = coordination[result['id']]
+        if not band_lead_activity:
+            warnings.append('Band has no designated lead activity; melody audibility cannot be verified.')
+    for result, performance, source_midi in arrangements:
         if _is_successful_bytedance_solo_piano(
                 mode, result['instrument'], result['stats']):
             # The keyboard arranger keeps notes and timing in a solo Piano
@@ -4011,7 +4094,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                 'velocity_preserved': True,
                 'native_cc64_preserved': True,
             }
-        else:
+        elif mode != 'band':
             result['arrangement'] = arrange(
                 performance, result['instrument'], result['role'],
                 lead_activity=band_lead_activity if mode == 'band' else (),
@@ -4101,6 +4184,8 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                     'Piano: reliable isolated melody unavailable; preserving '
                     'detected notes instead of guessing the highest-note lead.')
         result['_performance_midi_path'] = performance_midi_path
+        if mode == 'band':
+            result['notation_subdivision'] = _band_notation_subdivision(score_midi_path, grid)
         midi_to_musicxml(
             score_midi_path, result['musicxml'], result['instrument'], grid,
             result['role'], title=title or song, artist=artist,
@@ -4124,7 +4209,8 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
             artist=artist,
         )
         combined_path = os.path.join(output_dir, f"{song}_band.musicxml")
-        _write_musicxml(combined, combined_path)
+        _write_musicxml(combined, combined_path,
+            subdivision=getattr(combined, '_augment_notation_subdivision', 8))
     manifest = {"mode": mode, "tempo": grid.bpm, "time_signature": grid.time_signature,
                 "key": grid.display_key, "parts": results, "combined_musicxml": combined_path,
                 "tempo_map": list(grid.tempo_map),
