@@ -647,8 +647,107 @@ def _fit_midi_candidates_to_range(midi, pitch_range):
     return removed
 
 
+def _recover_short_piano_lead(track, times, pitches, probabilities, valid):
+    """Recover short stable pitch runs only inside an established lead phrase.
+
+    Raw pitch evidence, rather than interpolated silence, must support every
+    recovered frame. No new attacks are inferred
+    from an unchanged pitch: repeated-note recovery needs separate onset data.
+    """
+    import numpy as np
+    from scipy.ndimage import median_filter
+
+    notes = sorted(track.notes, key=lambda n: n.start)
+    if len(notes) < 2 or len(times) < 2:
+        return []
+    step = float(times[1] - times[0])
+    finite = np.isfinite(pitches)
+    rounded = np.rint(np.where(finite, pitches, -1000)).astype(int)
+    stable = median_filter(rounded, size=3)
+    evidence = finite & valid & (probabilities >= .60) & (rounded == stable)
+    runs = []
+    start = 0
+    while start < len(times):
+        if not evidence[start]:
+            start += 1
+            continue
+        end = start + 1
+        while end < len(times) and evidence[end] and stable[end] == stable[start]:
+            end += 1
+        duration = (end - start) * step
+        if end - start >= 3 and .055 <= duration < .16:
+            runs.append((float(times[start]), float(times[end - 1] + step),
+                         int(stable[start]), float(np.mean(probabilities[start:end]))))
+        start = end
+    recovered = []
+    # A seven-frame smoother can extend the preceding note over a short pitch
+    # change. Recover that change only when confident raw frames establish the
+    # preceding AND following pitches. Correct just the erroneous held release.
+    for onset, release, pitch_value, confidence in runs:
+        held = next((n for n in notes if n.start < onset < n.end
+                     and n.pitch != pitch_value), None)
+        following = next((n for n in notes if n.start >= release), None)
+        if held is None or following is None or following.start - release > .10:
+            continue
+        if held.end > following.start or held.end - onset > .20:
+            continue
+        if any(n.pitch == pitch_value and n.start < release and n.end > onset for n in notes):
+            continue
+        before_mask = (times >= onset - .07) & (times < onset)
+        after_mask = (times >= release) & (times < release + .07)
+        def supports(mask, pitch):
+            indices = np.flatnonzero(mask & evidence)
+            return len(indices) >= 2 and np.mean(stable[indices] == pitch) >= .8
+        if not (supports(before_mask, held.pitch) and supports(after_mask, following.pitch)):
+            continue
+        if abs(pitch_value - held.pitch) > 5 or abs(pitch_value - following.pitch) > 5:
+            continue
+        if held.pitch == following.pitch and abs(pitch_value - held.pitch) > 4:
+            continue
+        if onset - held.start < .055:
+            continue
+        held.end = onset
+        track.notes.append(pretty_midi.Note(
+            velocity=max(55, min(110, round(confidence * 127))),
+            pitch=pitch_value, start=onset, end=release))
+        recovered.append({'start': onset, 'end': release, 'pitch': pitch_value,
+                          'confidence': confidence, 'source': 'supported_pyin_frames',
+                          'preceding_release_corrected': True})
+    for previous, following in zip(notes, notes[1:]):
+        # Longer gaps can be real phrase rests; this pass only repairs a fast
+        # run between known notes, with supported evidence connecting both sides.
+        if not .055 <= following.start - previous.end <= .60:
+            continue
+        path = [r for r in runs if r[0] >= previous.end and r[1] <= following.start]
+        if not path:
+            continue
+        chain = [(previous.start, previous.end, previous.pitch, 1.)] + path + [
+            (following.start, following.end, following.pitch, 1.)]
+        if any(b[0] - a[1] > .075 or abs(b[2] - a[2]) > 7
+               for a, b in zip(chain, chain[1:])):
+            continue
+        for index, run in enumerate(path, 1):
+            if any(abs(r['start'] - run[0]) < 1e-6 for r in recovered):
+                continue
+            before, after = chain[index - 1], chain[index + 1]
+            if run[2] == before[2] or run[2] == after[2]:
+                continue
+            # A short upward/downward spike returning to its starting pitch
+            # needs stronger evidence than this recovery pass can provide.
+            if before[2] == after[2] and abs(run[2] - before[2]) > 4:
+                continue
+            onset, release, pitch_value, confidence = run
+            track.notes.append(pretty_midi.Note(
+                velocity=max(55, min(110, round(confidence * 127))),
+                pitch=pitch_value, start=onset, end=release))
+            recovered.append({'start': onset, 'end': release, 'pitch': pitch_value,
+                              'confidence': confidence, 'source': 'supported_pyin_frames'})
+    track.notes.sort(key=lambda n: (n.start, n.pitch))
+    return recovered
+
+
 def _transcribe_vocal_melody(audio_path, midi_path, pitch_range=None,
-                             harmonic_focus=False):
+                             harmonic_focus=False, recover_short_piano=False):
     """Track one dominant lead line with pYIN before score cleanup."""
     import librosa
     import numpy as np
@@ -746,9 +845,16 @@ def _transcribe_vocal_melody(audio_path, midi_path, pitch_range=None,
         ))
     if not track.notes:
         raise ValueError('Vocal pitch tracker did not produce playable notes')
+    recovered = []
+    if recover_short_piano:
+        raw_pitch = np.full(len(f0), np.nan)
+        raw_pitch[pitched] = librosa.hz_to_midi(f0[pitched])
+        recovered = _recover_short_piano_lead(
+            track, times, raw_pitch, np.nan_to_num(probabilities), valid)
     output.instruments.append(track)
     output.write(midi_path)
-    return {'notes': len(track.notes), 'method': 'pyin'}
+    return {'notes': len(track.notes), 'method': 'pyin',
+            **({'short_piano_notes_recovered': recovered} if recover_short_piano else {})}
 
 
 def _basic_pitch_profile(instrument_name, requested_profile=None, polyphonic=False):
@@ -795,7 +901,7 @@ def _write_detector_debug_artifact(midi_path, note_events, profile_name):
 
 def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
                     melody_range=None, harmonic_focus=False, instrument_name=None,
-                    detector_profile=None):
+                    detector_profile=None, recover_short_piano=False):
     """Basic Pitch transcription, with a confidence/no-signal guard."""
     import numpy as np
     import librosa
@@ -813,6 +919,7 @@ def transcribe_stem(audio_path, midi_path, polyphonic, prefer_pyin=False,
             pyin_stats = _transcribe_vocal_melody(
                 audio_path, pyin_path, pitch_range=melody_range,
                 harmonic_focus=harmonic_focus,
+                recover_short_piano=recover_short_piano,
             )
         except (ValueError, RuntimeError):
             pyin_path, pyin_stats = None, None
@@ -1304,7 +1411,8 @@ def _select_supported_piano_lead(lead_source, lead_midi_path, lead_stats, stem_d
             temporary.append(target)
             try:
                 stats = transcribe_stem(source, target, polyphonic=False,
-                                       prefer_pyin=True, melody_range=(40, 96))
+                                       prefer_pyin=True, melody_range=(40, 96),
+                                       recover_short_piano=True)
                 stats.update(validate_transcription(source, target))
                 confidence = stats.get('alignment_confidence')
                 accepted = (confidence is not None and confidence >= .45 and
@@ -2235,6 +2343,9 @@ def _piano_score_from_midi(midi_path, grid):
         for source_note in source.notes
     }
     raw_events = []
+    protected_lead = sorted(
+        (n for n in source_notes if id(n) in lead_note_ids),
+        key=lambda n: (n.start, n.pitch))
     # Start at a sixteenth grid, but use an eighth grid for dense detector
     # output. A transcription may contain a correct musical contour plus a
     # second layer of tiny re-attacks; printing every one creates the jagged,
@@ -2256,6 +2367,10 @@ def _piano_score_from_midi(midi_path, grid):
     minimum_written_duration = 1.0 / subdivision
     for source in source_notes:
         is_lead = id(source) in lead_note_ids
+        if is_lead:
+            # Melody has its own voice below. It must not be clustered with
+            # accompaniment, reduced to a chord, or lose a repeated attack.
+            continue
         if not is_lead and (source.velocity < 42 or source.end - source.start < 0.11):
             continue
         if is_lead and source.end - source.start < 0.035:
@@ -2263,7 +2378,7 @@ def _piano_score_from_midi(midi_path, grid):
         raw_start = grid.seconds_to_quarter(source.start)
         raw_end = grid.seconds_to_quarter(source.end)
         raw_events.append((raw_start, raw_end, source))
-    if not raw_events:
+    if not raw_events and not protected_lead:
         raise ValueError("The piano transcription has no confident notation events")
 
     # Notes in one piano chord commonly arrive from the detector a few
@@ -2322,7 +2437,7 @@ def _piano_score_from_midi(midi_path, grid):
         # In an entirely low passage, keep the top line visible in treble
         # instead of leaving the right hand empty and changing the split for
         # every following chord.
-        if not assigned[right_hand] and assigned[left_hand]:
+        if not protected_lead and not assigned[right_hand] and assigned[left_hand]:
             promoted = max(assigned[left_hand], key=lambda item: item[1].pitch)
             assigned[left_hand].remove(promoted)
             assigned[right_hand].append(promoted)
@@ -2342,6 +2457,11 @@ def _piano_score_from_midi(midi_path, grid):
                 ) if dense_notation else (
                     3 if destination is right_hand else 2
                 )
+                if destination is right_hand and protected_lead:
+                    nearby_lead = sum(
+                        abs(grid.seconds_to_quarter(n.start) - start) <= .125
+                        for n in protected_lead)
+                    max_printed_tones = max(1, max_printed_tones - nearby_lead)
                 ranked = sorted(
                     sources,
                     key=lambda item: (
@@ -2409,6 +2529,41 @@ def _piano_score_from_midi(midi_path, grid):
                 destination.insert(0, voice['stream'])
 
     score = stream.Score()
+    if protected_lead:
+        # Place the complete protected melody above the existing support.
+        # Use a finer rhythmic grid than the accompaniment reduction. Releases
+        # are clipped for engraving only; performance MIDI remains untouched.
+        if not right_hand.getElementsByClass(stream.Voice):
+            support_voice = stream.Voice(id=2)
+            for item in list(right_hand.notes):
+                offset = item.offset
+                right_hand.remove(item)
+                support_voice.insert(offset, item)
+            if support_voice.notes:
+                right_hand.insert(0, support_voice)
+        else:
+            for index, voice in enumerate(right_hand.getElementsByClass(stream.Voice), 2):
+                voice.id = index
+        lead_voices = []
+        lead_starts = [round(grid.seconds_to_quarter(n.start) * 8) / 8
+                       for n in protected_lead]
+        for index, source in enumerate(protected_lead):
+            start = lead_starts[index]
+            end = max(start + .125, round(grid.seconds_to_quarter(source.end) * 8) / 8)
+            if (index + 1 < len(lead_starts) and lead_starts[index + 1] > start
+                    and protected_lead[index + 1].pitch == source.pitch):
+                end = min(end, lead_starts[index + 1])
+            written = note.Note(source.pitch, quarterLength=end - start)
+            written.volume.velocity = source.velocity
+            written.stemDirection = 'up'
+            slot = next((v for v in lead_voices if v['end'] <= start), None)
+            if slot is None:
+                slot = {'stream': stream.Voice(id=f'lead{len(lead_voices)+1}'), 'end': 0.}
+                lead_voices.append(slot)
+            slot['stream'].insert(start, written)
+            slot['end'] = end
+        for slot in lead_voices:
+            right_hand.insert(0, slot['stream'])
     score.insert(0, right_hand)
     score.insert(0, left_hand)
     group = layout.StaffGroup([right_hand, left_hand], name='Piano', symbol='brace', barTogether=True)
@@ -3629,6 +3784,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
                             polyphonic=False,
                             prefer_pyin=True,
                             melody_range=(40, 96),
+                            recover_short_piano=name == 'Piano',
                         )
                         if plan_debug:
                             plan_sources['lead'] = midi_events(lead_midi_path)
