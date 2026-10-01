@@ -1187,49 +1187,26 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Spacer(),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black26,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    child: Text(
-                                      'Feature',
-                                      style: TextStyle(
-                                        fontFamily: fontFamily,
-                                        color: Colors.white,
-                                        fontSize: isSmallScreen ? 10 : 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                child: Text(
+                                  'Feature',
+                                  style: TextStyle(
+                                    fontFamily: fontFamily,
+                                    color: Colors.white,
+                                    fontSize: isSmallScreen ? 10 : 12,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        'SHEET',
-                                        style: TextStyle(
-                                          fontFamily: fontFamily,
-                                          color: Colors.white,
-                                          fontSize: isSmallScreen ? 20 : 26,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 0.5,
-                                          height: 1.1,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
+                              const SizedBox(height: 8),
                               Text(
-                                'GENERATION',
+                                'SHEET\nGENERATION',
                                 style: TextStyle(
                                   fontFamily: fontFamily,
                                   color: Colors.white,
