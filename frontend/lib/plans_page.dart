@@ -1323,6 +1323,10 @@ class _PlanCardDemoSheetState extends State<_PlanCardDemoSheet> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                         labelText: 'Visa / Mastercard number',
+                        prefixIconConstraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
                         prefixIcon: _PlanBrandMark(brand: _brand)),
                   ),
                   ResponsivePaymentFields(

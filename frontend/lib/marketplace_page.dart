@@ -2107,6 +2107,10 @@ class _CardValidationSheetState extends State<_CardValidationSheet> {
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         labelText: 'Visa / Mastercard number',
+                        prefixIconConstraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
                         prefixIcon: _CardBrandMark(brand: _cardBrand),
                       )),
                   ResponsivePaymentFields(
