@@ -38,7 +38,7 @@ class PlansPage extends StatelessWidget {
     _PlanDetails(
       type: AppPlan.plus,
       name: 'Plus',
-      price: r'$4.99',
+      price: r'$2.99',
       period: 'per month',
       description: 'For musicians who practise regularly.',
       features: [
@@ -51,7 +51,7 @@ class PlansPage extends StatelessWidget {
     _PlanDetails(
       type: AppPlan.pro,
       name: 'Pro',
-      price: r'$9.99',
+      price: r'$5.99',
       period: 'per month',
       description: 'For musicians creating every day.',
       features: [

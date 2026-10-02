@@ -113,8 +113,8 @@ function getBearerToken(request) {
 }
 
 const PLAN_CATALOG = Object.freeze({
-  plus: { amount: 4.99, currency: 'USD', label: 'Plus' },
-  pro: { amount: 9.99, currency: 'USD', label: 'Pro' },
+  plus: { amount: 2.99, currency: 'USD', label: 'Plus' },
+  pro: { amount: 5.99, currency: 'USD', label: 'Pro' },
 });
 const paymentAttempts = new Map();
 const verificationEmailAttempts = new Map();
