@@ -45,10 +45,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
   var _cart = <_CartItem>[];
   var _products = <_Product>[];
   StreamSubscription<List<MarketplaceListing>>? _listingsSubscription;
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<void>? _purchaseSubscription;
+  Set<String> _purchasedListingIds = {};
+  int _purchaseRefresh = 0;
 
   @override
   void initState() {
     super.initState();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((_) {
+      if (mounted) setState(() => _purchasedListingIds = {});
+      unawaited(_refreshPurchases());
+    });
+    _purchaseSubscription = MarketplacePaymentService.purchaseChanges
+        .listen((_) => unawaited(_refreshPurchases()));
     _listingsSubscription = SocialService.instance.marketplaceFeed().listen(
       (listings) {
         if (mounted) {
@@ -59,10 +69,37 @@ class _MarketplacePageState extends State<MarketplacePage> {
     );
   }
 
+  Future<void> _refreshPurchases() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final request = ++_purchaseRefresh;
+    if (userId == null) return;
+    try {
+      final purchases = await MarketplacePaymentService.purchases();
+      if (!mounted ||
+          request != _purchaseRefresh ||
+          FirebaseAuth.instance.currentUser?.uid != userId) {
+        return;
+      }
+      setState(() {
+        _purchasedListingIds = purchases
+            .map((purchase) => purchase.listingId)
+            .whereType<String>()
+            .where((id) => id.isNotEmpty)
+            .toSet();
+        _cart.removeWhere(
+            (item) => _purchasedListingIds.contains(item.product.listingId));
+      });
+    } catch (_) {
+      // Keep the last confirmed ownership if the server is temporarily offline.
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     _listingsSubscription?.cancel();
+    _authSubscription?.cancel();
+    _purchaseSubscription?.cancel();
     super.dispose();
   }
 
@@ -71,6 +108,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     final query = _searchController.text.trim().toLowerCase();
     final visibleProducts = _products
         .where((product) {
+          if (_purchasedListingIds.contains(product.listingId)) return false;
           final matchesTab =
               _category == 'Music' || product.category == _category;
           return matchesTab &&
@@ -113,7 +151,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
                       onOpenSearch: () async {
                         await Navigator.of(context).push(
                           morphSearchRoute(
-                            (_) => _MarketplaceSearchPage(products: _products),
+                            (_) => _MarketplaceSearchPage(
+                                products: _products
+                                    .where((product) => !_purchasedListingIds
+                                        .contains(product.listingId))
+                                    .toList()),
                           ),
                         );
                       },
@@ -204,6 +246,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   void _addToCart(_Product product) {
+    if (_purchasedListingIds.contains(product.listingId)) return;
     final existing =
         _cart.indexWhere((item) => item.product.title == product.title);
     setState(() {
@@ -230,6 +273,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     if (cart != null && mounted) {
       setState(() => _cart = cart);
     }
+    await _refreshPurchases();
   }
 
   Widget _productStrip(List<_Product> products) => SizedBox(

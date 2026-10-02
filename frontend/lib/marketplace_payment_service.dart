@@ -85,10 +85,12 @@ class MarketplacePurchase {
     required this.title,
     required this.quantity,
     required this.paidAt,
+    this.listingId,
     this.assetUrl,
   });
 
   final String orderId;
+  final String? listingId;
   final String title;
   final int quantity;
   final DateTime paidAt;
@@ -97,6 +99,7 @@ class MarketplacePurchase {
   factory MarketplacePurchase.fromJson(Map<String, dynamic> json) =>
       MarketplacePurchase(
         orderId: json['orderId']?.toString() ?? '',
+        listingId: json['listingId']?.toString(),
         title: json['title']?.toString() ?? 'Marketplace item',
         quantity: (json['quantity'] as num?)?.toInt() ?? 1,
         paidAt:
@@ -151,6 +154,9 @@ class _MarketplaceServerError implements Exception {
 class MarketplacePaymentService {
   const MarketplacePaymentService._();
 
+  static final _purchaseChanges = StreamController<void>.broadcast();
+  static Stream<void> get purchaseChanges => _purchaseChanges.stream;
+
   static Future<MarketplacePayment> createCheckout(
           List<MarketplaceCheckoutItem> items) async =>
       MarketplacePayment.fromJson(
@@ -158,10 +164,13 @@ class MarketplacePaymentService {
         'items': items.map((item) => item.toJson()).toList(),
       }));
 
-  static Future<MarketplacePayment> verify(String paymentId) async =>
-      MarketplacePayment.fromJson(await _request(
-          'POST', '/api/payments/bakong/$paymentId/verify',
-          body: const {}));
+  static Future<MarketplacePayment> verify(String paymentId) async {
+    final payment = MarketplacePayment.fromJson(await _request(
+        'POST', '/api/payments/bakong/$paymentId/verify',
+        body: const {}));
+    if (payment.status == 'paid') _purchaseChanges.add(null);
+    return payment;
+  }
 
   static Future<MarketplaceSellerSummary> sellerSummary() async =>
       MarketplaceSellerSummary.fromJson(await _request(
