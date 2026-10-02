@@ -1816,7 +1816,7 @@ def _transcribe_solo_violin_cover(stem_dir, midi_path, duration):
     }
 
 
-def _transcribe_solo_guitar_cover(stem_dir, midi_path, duration, grid):
+def _transcribe_solo_guitar_cover(stem_dir, midi_path, duration, grid, instrument_name='Guitar'):
     """Arrange shared song evidence into one playable Solo Guitar cover.
 
     Unlike Band Guitar, the separated guitar stem is optional evidence only.
@@ -1897,6 +1897,15 @@ def _transcribe_solo_guitar_cover(stem_dir, midi_path, duration, grid):
             verified_melody_notes=verified_count,
             fallback_melody_notes=len(fallback_notes),
         )
+        if instrument_name == 'Electric Guitar':
+            # Reuse the validated physical performance, not the classical
+            # sample source. Program changes never alter canonical events.
+            electric_midi = pretty_midi.PrettyMIDI(midi_path)
+            for track in electric_midi.instruments:
+                track.program = 27
+                track.name = 'Solo Electric Guitar unified performance'
+            electric_midi.write(midi_path)
+            arrangement['electric_guitar_version'] = 'physical_performance_v1'
     if not arrangement['notes']:
         raise ValueError('No defensible Solo Guitar material was found.')
     return {
@@ -3040,7 +3049,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
             subdivision=subdivision, preserve_duplicates=True)
     elif name in {'Flute', 'Saxophone'} and not band_mode and role in ('melody', 'lead'):
         score = _flute_score_from_midi(midi_path, grid, instrument_name=name)
-    elif role in ("melody", "lead", "bass") and name != 'Guitar':
+    elif role in ("melody", "lead", "bass") and name not in {'Guitar', 'Electric Guitar'}:
         score = _solo_score_from_midi(midi_path, name, grid)
     else:
         score = _polyphonic_score_from_midi(midi_path, grid)
@@ -3132,7 +3141,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
         _apply_detected_techniques(part, techniques, grid)
     # Turn the cleaned beat-grid events into readable bars, rests and ties.
     score.makeNotation(inPlace=True)
-    if name == 'Guitar':
+    if name in {'Guitar', 'Electric Guitar'}:
         _normalize_guitar_voice_ids(score)
     _normalize_musicxml_durations(score, subdivision=notation_subdivision)
     _add_score_formatting(
@@ -3147,7 +3156,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
     _write_musicxml(score, xml_path, subdivision=notation_subdivision)
     if name in TUNINGS:
         fingering_path = None
-        if name == 'Guitar':
+        if name in {'Guitar', 'Electric Guitar'}:
             # Solo Guitar persists the exact string/fret assignment selected
             # by the arranger beside its source MIDI.  The performance
             # renderer appends ``.arranged.mid`` without changing attacks, so
@@ -3166,7 +3175,7 @@ def midi_to_musicxml(midi_path, xml_path, name, grid, role, title=None, artist='
             )
         add_tablature_markup(
             xml_path, name, fingering_path=fingering_path,
-            strict_canonical=(name == 'Guitar' and fingering_path is not None),
+            strict_canonical=(name in {'Guitar', 'Electric Guitar'} and fingering_path is not None),
         )
     _add_musicxml_credits(xml_path, title=title, artist=artist)
 
@@ -3738,7 +3747,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
         # accompaniment before transcription even begins.
         piano_arrangement = name in ("Piano", "Synthesizer", "Organ") and mode == "solo"
         solo_violin_cover = name == 'Violin' and mode == 'solo'
-        solo_guitar_cover = name == 'Guitar' and mode == 'solo'
+        solo_guitar_cover = name in {'Guitar', 'Electric Guitar'} and mode == 'solo'
         if mode == 'band':
             stem, matched_stem = _band_source_for_part(name, role, stem_dir)
         else:
@@ -3800,7 +3809,8 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
             elif solo_guitar_cover:
                 import soundfile as sf
                 stats = _transcribe_solo_guitar_cover(
-                    stem_dir, midi_path, sf.info(audio_path).duration, grid)
+                    stem_dir, midi_path, sf.info(audio_path).duration, grid,
+                    instrument_name=name)
             elif use_bytedance_piano:
                 try:
                     # Use the uploaded Piano recording, not an unrelated

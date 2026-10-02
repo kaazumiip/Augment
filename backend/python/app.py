@@ -704,7 +704,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
         return []
 
     raw.sort(key=lambda midi_note: (midi_note.start, midi_note.pitch))
-    if preserve_band_performance or instrument_name in {'Guitar', 'Flute', 'Saxophone'} or (
+    if preserve_band_performance or instrument_name in {'Guitar', 'Electric Guitar', 'Flute', 'Saxophone'} or (
             instrument_name == 'Piano' and preserve_piano_performance) or (
             instrument_name == 'Violin' and preserve_violin_performance):
         seconds_per_quarter = 60.0 / max(1.0, float(tempo_bpm))
@@ -713,7 +713,7 @@ def _extract_performance_notes(midi_path, instrument_name, tempo_bpm,
             'offset': item.start / seconds_per_quarter,
             'duration': (item.end - item.start) / seconds_per_quarter,
             'velocity': item.velocity,
-            'preserve_guitar_performance': instrument_name == 'Guitar',
+            'preserve_guitar_performance': instrument_name in {'Guitar', 'Electric Guitar'},
             'preserve_piano_performance': preserve_piano_performance,
             'preserve_violin_performance': preserve_violin_performance,
             'preserve_band_performance': preserve_band_performance,
@@ -1702,7 +1702,7 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
             if expressive_lead else {})
         for event_index, event in enumerate(part['notes']):
             if (event.get('preserve_band_performance') or
-                    (instrument_name == 'Guitar' and event.get('preserve_guitar_performance')) or
+                    (instrument_name in {'Guitar', 'Electric Guitar'} and event.get('preserve_guitar_performance')) or
                     (instrument_name == 'Piano' and event.get('preserve_piano_performance'))):
                 # Canonical Guitar MIDI already contains its physical strokes,
                 # ringing durations and role dynamics. Do not re-strum it.
@@ -2039,6 +2039,7 @@ def health():
                     'saxophone_performance': 'source_faithful_monophonic_v1',
                     'band_performance': 'source_coordinated_v1',
                     'generation_json': 'numpy_native_v1',
+                    'electric_guitar_performance': 'physical_performance_v1',
                     'band_violin_playback': 'solo_phrasing_stereo_v1'})
 
 
@@ -2299,7 +2300,7 @@ def generate_sheet():
                     # Vocal contour is useful as a notation hint, but copying
                     # it to violin MIDI pitch bends makes the lead wander and
                     # can bend the following note on the same channel.
-                    if part['instrument'] != 'Violin':
+                    if part['instrument'] not in {'Violin', 'Electric Guitar'}:
                         _attach_playback_techniques(
                             part_notes,
                             part.get('techniques'),
@@ -2307,7 +2308,7 @@ def generate_sheet():
                         )
                     render_part = _band_playback_part(
                         part['instrument'], part.get('role'), part_notes,
-                        (None if (mode == 'band' or part['instrument'] in {'Flute', 'Saxophone'} or part.get('_preserve_piano_performance') or
+                        (None if (mode == 'band' or part['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part.get('_preserve_piano_performance') or
                                   part.get('_preserve_violin_performance')) else
                          manifest.get('tempo_map')),
                         manifest['tempo'], predicted_pedal,
@@ -2949,7 +2950,7 @@ def generate_from_youtube():
                 }
                 response_parts.append(response_part)
                 performance_midi = part_data.get('_performance_midi_path')
-                if ((requested_mode == 'band' or part_data['instrument'] in {'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance')) and
+                if ((requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance')) and
                         performance_midi and os.path.isfile(performance_midi)):
                     part_notes = _extract_performance_notes(
                         performance_midi, part_data['instrument'],
@@ -2963,7 +2964,7 @@ def generate_from_youtube():
                 response_part['playback_events'] = part_notes
                 render_part = _band_playback_part(
                     part_data['instrument'], part_data.get('role'), part_notes,
-                    (None if requested_mode == 'band' or part_data['instrument'] in {'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') else
+                    (None if requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') else
                      manifest.get('tempo_map')), manifest['tempo'],
                 )
                 render_parts.append(render_part)
