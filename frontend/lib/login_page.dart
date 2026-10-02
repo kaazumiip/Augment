@@ -93,7 +93,18 @@ class _LoginPageState extends State<LoginPage> {
     const cream = Color(0xFFFFF9F5);
     final width = MediaQuery.sizeOf(context).width.clamp(0.0, 600.0);
     final compact = MediaQuery.sizeOf(context).height < 720;
-    final heroHeight = (width * .58).clamp(190.0, 330.0);
+    final smallest = width <= 340;
+    final heroHeight = smallest
+        ? (compact ? 180.0 : 202.0)
+        : (width * .58).clamp(190.0, 330.0);
+    final artworkWidth = width * (smallest ? .76 : .78);
+    final artworkHeight =
+        smallest ? (compact ? 215.0 : 235.0) : heroHeight * 1.16;
+    // Asset is 285px wide with 22 transparent pixels on its right edge.
+    // Account for contain-fit scaling and the form's 21px side inset.
+    final paintedWidth = artworkWidth < artworkHeight * 285 / 294
+        ? artworkWidth
+        : artworkHeight * 285 / 294;
 
     return Scaffold(
       backgroundColor: cream,
@@ -115,15 +126,17 @@ class _LoginPageState extends State<LoginPage> {
                         children: [
                           Positioned(
                             left: 0,
-                            top: heroHeight * .43,
+                            top: smallest
+                                ? (compact ? 84 : 100)
+                                : heroHeight * .43,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   _isRegistering ? 'SIGN UP' : 'LOG IN',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: Colors.black,
-                                    fontSize: 38,
+                                    fontSize: smallest ? 34 : 38,
                                     fontWeight: FontWeight.w800,
                                     height: .9,
                                   ),
@@ -141,8 +154,8 @@ class _LoginPageState extends State<LoginPage> {
                                     _isRegistering
                                         ? 'Create an account to continue'
                                         : 'Log in or sign up to continue',
-                                    style: const TextStyle(
-                                        fontSize: 14, height: 1.2),
+                                    style: TextStyle(
+                                        fontSize: _textSize(14), height: 1.2),
                                   ),
                                 ),
                               ],
@@ -151,10 +164,11 @@ class _LoginPageState extends State<LoginPage> {
                           Positioned(
                             // The supplied PNG includes transparent pixels at its right edge.
                             // Offset those pixels outside the page so the visible sleeve is flush.
-                            right: -width * .10,
-                            top: -heroHeight * .10,
-                            width: width * .78,
-                            height: heroHeight * 1.16,
+                            right:
+                                smallest ? -42 : -21 - paintedWidth * 22 / 285,
+                            top: smallest ? -27 : -heroHeight * .10,
+                            width: artworkWidth,
+                            height: artworkHeight,
                             child: Image.asset(
                               'assets/login_record_hero.png',
                               fit: BoxFit.contain,
@@ -233,8 +247,8 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           const SizedBox(width: 5),
-                          const Text('Remember me',
-                              style: TextStyle(fontSize: 13)),
+                          Text('Remember me',
+                              style: TextStyle(fontSize: _textSize(13))),
                         ]),
                         TextButton(
                           onPressed: _resetPassword,
@@ -244,8 +258,8 @@ class _LoginPageState extends State<LoginPage> {
                             minimumSize: const Size(0, 26),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('Forgot password?',
-                              style: TextStyle(fontSize: 13)),
+                          child: Text('Forgot password?',
+                              style: TextStyle(fontSize: _textSize(13))),
                         ),
                       ],
                     ),
@@ -271,8 +285,9 @@ class _LoginPageState extends State<LoginPage> {
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
                             : Text(_isRegistering ? 'CREATE ACCOUNT' : 'LOG IN',
-                                style: const TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.w700)),
+                                style: TextStyle(
+                                    fontSize: _textSize(15),
+                                    fontWeight: FontWeight.w700)),
                       ),
                     ),
                     const SizedBox(height: 11),
@@ -282,8 +297,8 @@ class _LoginPageState extends State<LoginPage> {
                           text: _isRegistering
                               ? 'Already have an account? '
                               : "Don't have an account? ",
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.black),
+                          style: TextStyle(
+                              fontSize: _textSize(13), color: Colors.black),
                           children: [
                             WidgetSpan(
                               child: GestureDetector(
@@ -299,8 +314,8 @@ class _LoginPageState extends State<LoginPage> {
                                       },
                                 child: Text(
                                   _isRegistering ? 'Log in' : 'Sign up!',
-                                  style: const TextStyle(
-                                      fontSize: 13,
+                                  style: TextStyle(
+                                      fontSize: _textSize(13),
                                       color: red,
                                       fontWeight: FontWeight.w700),
                                 ),
@@ -311,13 +326,14 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Row(
+                    Row(
                       children: [
-                        Expanded(child: Divider()),
+                        const Expanded(child: Divider()),
                         Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 13),
-                            child: Text('or', style: TextStyle(fontSize: 13))),
-                        Expanded(child: Divider())
+                            padding: const EdgeInsets.symmetric(horizontal: 13),
+                            child: Text('or',
+                                style: TextStyle(fontSize: _textSize(13)))),
+                        const Expanded(child: Divider())
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -344,10 +360,14 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  double _textSize(double size) =>
+      MediaQuery.sizeOf(context).width <= 340 ? size - 2 : size;
+
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(left: 2, bottom: 5),
         child: Text(text,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            style: TextStyle(
+                fontSize: _textSize(14), fontWeight: FontWeight.w500)),
       );
 
   Widget _field({
@@ -365,12 +385,12 @@ class _LoginPageState extends State<LoginPage> {
         keyboardType: keyboardType,
         validator: validator,
         cursorColor: const Color(0xFFD30A02),
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: _textSize(16), fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(
-              fontSize: 15,
-              color: Color(0xFFADADAD),
+          hintStyle: TextStyle(
+              fontSize: _textSize(15),
+              color: const Color(0xFFADADAD),
               fontWeight: FontWeight.w400),
           filled: true,
           fillColor: Colors.white.withValues(alpha: .7),
@@ -431,7 +451,7 @@ class _LoginPageState extends State<LoginPage> {
             alignment: Alignment.center,
             children: [
               Align(alignment: Alignment.centerLeft, child: icon),
-              Text(label, style: const TextStyle(fontSize: 14))
+              Text(label, style: TextStyle(fontSize: _textSize(14)))
             ],
           ),
         ),
