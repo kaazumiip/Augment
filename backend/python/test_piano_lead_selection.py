@@ -26,7 +26,7 @@ class PianoLeadSelectionTests(unittest.TestCase):
 
     def run_case(self, scores):
         with tempfile.TemporaryDirectory() as directory:
-            for name in ('vocals.wav', 'other.wav', 'piano.wav'):
+            for name in ('vocals.wav', *scores):
                 # Paths only: all source/model activity is mocked.
                 open(os.path.join(directory, name), 'wb').close()
             target = os.path.join(directory, 'lead.mid')
@@ -59,6 +59,19 @@ class PianoLeadSelectionTests(unittest.TestCase):
         self.assertTrue(unchanged)
         self.assertTrue(stats['rejected_as_unreliable_lead'])
         self.assertIsNone(stats['source_selection']['selected_source'])
+
+    def test_supported_guitar_stem_can_supply_piano_lead(self):
+        source, stats, accepted, unchanged, pitch = self.run_case(
+            {'other.wav': .25, 'piano.wav': .19, 'guitar.wav': .72})
+        self.assertTrue(accepted)
+        self.assertEqual(os.path.basename(source), 'guitar.wav')
+        self.assertEqual(stats['source_selection']['selected_source'], 'guitar.wav')
+
+    def test_weak_guitar_stem_does_not_force_a_lead(self):
+        source, stats, accepted, unchanged, pitch = self.run_case(
+            {'other.wav': .25, 'piano.wav': .19, 'guitar.wav': .30})
+        self.assertFalse(accepted)
+        self.assertTrue(unchanged)
 
 
 if __name__ == '__main__':

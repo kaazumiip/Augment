@@ -1437,7 +1437,10 @@ def _select_supported_piano_lead(lead_source, lead_midi_path, lead_stats, stem_d
     best = None
     temporary = []
     try:
-        for filename in ('other.wav', 'piano.wav'):
+        # Instrumental lead evidence can live in the separated guitar stem,
+        # even when the requested output instrument is Piano. Source identity
+        # is not the target instrument; retain the same evidence requirements.
+        for filename in ('other.wav', 'piano.wav', 'guitar.wav'):
             source = os.path.join(stem_dir, filename)
             if source == lead_source or not os.path.exists(source):
                 continue
