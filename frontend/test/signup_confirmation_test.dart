@@ -6,6 +6,7 @@ void main() {
   testWidgets('sign-up rejects mismatched confirmation before authentication',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+    await tester.ensureVisible(find.text('Sign up!'));
     await tester.tap(find.text('Sign up!'));
     await tester.pumpAndSettle();
     expect(find.text('Confirm password'), findsOneWidget);
