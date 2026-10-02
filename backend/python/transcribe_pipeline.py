@@ -2825,7 +2825,11 @@ def _write_musicxml(score, path, subdivision=8):
         # microscopic boundary fragment. A second cleanup is deterministic
         # and preserves all events at eighth-note-or-longer resolution.
         _sanitize_musicxml_export(score, subdivision=subdivision)
-        written_path = score.write('musicxml', fp=path)
+        # The score already has measures, ties, rests and beams. Running
+        # makeNotation again inside the exporter can recreate the same
+        # inexpressible percussion rest after our cleanup. Export the cleaned
+        # notation as-is on retry; canonical MIDI is never touched.
+        written_path = score.write('musicxml', fp=path, makeNotation=False)
     _normalize_musicxml_voice_numbers(path)
     return written_path
 

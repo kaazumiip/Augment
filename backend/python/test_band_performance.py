@@ -22,6 +22,46 @@ def midi_with(notes, program=73):
 
 
 class BandPerformanceTests(unittest.TestCase):
+    def test_export_retry_does_not_repeat_the_failing_notation_pass(self):
+        from music21 import stream, note, meter
+        from music21.musicxml.xmlObjects import MusicXMLExportException
+        with tempfile.TemporaryDirectory() as folder:
+            score = stream.Score()
+            part = stream.Part()
+            part.append(meter.TimeSignature('4/4'))
+            part.append(note.Unpitched(quarterLength=1))
+            score.insert(0, part)
+            score.makeNotation(inPlace=True)
+            original = score.write
+            calls = []
+            def write(*args, **kwargs):
+                calls.append(kwargs)
+                if len(calls) == 1:
+                    raise MusicXMLExportException('Cannot convert inexpressible durations to MusicXML.')
+                return original(*args, **kwargs)
+            with patch.object(score, 'write', side_effect=write):
+                _write_musicxml(score, str(Path(folder)/'retry.musicxml'))
+            self.assertIs(calls[1]['makeNotation'], False)
+
+    def test_long_layered_drum_score_exports_with_shared_triplet_grid(self):
+        with tempfile.TemporaryDirectory() as folder:
+            grid = Grid(137.3, '4/4', 'C')
+            mid = str(Path(folder)/'drums.mid')
+            xml = str(Path(folder)/'drums.musicxml')
+            source = pretty_midi.PrettyMIDI(initial_tempo=grid.bpm)
+            track = pretty_midi.Instrument(0, is_drum=True)
+            for i in range(1250):
+                start = i * (60/grid.bpm)/3 + .003
+                for pitch in ([36,42] if i%3 == 0 else [42]):
+                    track.notes.append(pretty_midi.Note(80,pitch,start,start+.061))
+            source.instruments.append(track)
+            source.write(mid)
+            midi_to_musicxml(mid,xml,'Drums',grid,'drums',band_mode=True)
+            combined = _build_band_score([dict(instrument='Drums',role='drums',
+                musicxml=xml,notation_subdivision=24)],grid)
+            _write_musicxml(combined,str(Path(folder)/'combined.musicxml'),
+                            subdivision=24)
+
     def test_viewer_grid_never_requires_microscopic_rest_glyphs(self):
         with tempfile.TemporaryDirectory() as folder:
             path = str(Path(folder) / 'dense.mid')

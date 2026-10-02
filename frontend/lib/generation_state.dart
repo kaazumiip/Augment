@@ -331,7 +331,7 @@ class GenerationState extends ChangeNotifier {
             )
             .timeout(const Duration(seconds: 20));
         if (response.statusCode == 404) {
-          throw Exception(
+          throw const _GenerationJobFailed(
               'The generation job was lost because the Node server restarted. Generate the sheet again.');
         }
         if (response.statusCode == 200) {
