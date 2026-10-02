@@ -91,7 +91,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     const red = Color(0xFFD30A02);
     const cream = Color(0xFFFFF9F5);
-    final width = MediaQuery.sizeOf(context).width.clamp(0.0, 600.0);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final width = screenWidth.clamp(0.0, 600.0);
+    final outerInset = (screenWidth - width) / 2;
     final compact = MediaQuery.sizeOf(context).height < 720;
     final smallest = width <= 340;
     final heroHeight = smallest
@@ -113,6 +115,8 @@ class _LoginPageState extends State<LoginPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
             child: SingleChildScrollView(
+              // The artwork can extend beyond the centered form to the screen edge.
+              clipBehavior: Clip.none,
               padding: EdgeInsets.fromLTRB(21, compact ? 12 : 22, 21, 18),
               child: Form(
                 key: _formKey,
@@ -164,8 +168,9 @@ class _LoginPageState extends State<LoginPage> {
                           Positioned(
                             // The supplied PNG includes transparent pixels at its right edge.
                             // Offset those pixels outside the page so the visible sleeve is flush.
-                            right:
-                                smallest ? -42 : -21 - paintedWidth * 22 / 285,
+                            right: smallest
+                                ? -42
+                                : -outerInset - 21 - paintedWidth * 22 / 285,
                             top: smallest ? -27 : -heroHeight * .10,
                             width: artworkWidth,
                             height: artworkHeight,

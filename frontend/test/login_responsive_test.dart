@@ -8,6 +8,7 @@ void main() {
     const Size(360, 800),
     const Size(430, 932),
     const Size(600, 960),
+    const Size(766, 883),
   ]) {
     testWidgets('login and signup fit ${size.width}px', (tester) async {
       tester.view.devicePixelRatio = 1;
