@@ -10,6 +10,7 @@ import traceback
 import glob
 import time
 from flask import Flask, request, jsonify, send_file
+from flask.json.provider import DefaultJSONProvider
 from werkzeug.utils import secure_filename
 import music21
 from music21 import converter, instrument, tempo, key, meter, note, chord, stream, clef, repeat
@@ -84,7 +85,20 @@ except (ImportError, OSError, RuntimeError):
 import pretty_midi
 from scipy.io import wavfile
 
+class MusicalJSONProvider(DefaultJSONProvider):
+    """Serialize analysis scalars without changing musical result values."""
+
+    @staticmethod
+    def default(value):
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        return DefaultJSONProvider.default(value)
+
+
 app = Flask(__name__)
+app.json = MusicalJSONProvider(app)
 
 UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 OUTPUT_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'output')
@@ -2024,6 +2038,7 @@ def health():
                     'flute_short_releases': 'source_duration_v1',
                     'saxophone_performance': 'source_faithful_monophonic_v1',
                     'band_performance': 'source_coordinated_v1',
+                    'generation_json': 'numpy_native_v1',
                     'band_violin_playback': 'solo_phrasing_stereo_v1'})
 
 
