@@ -3,6 +3,27 @@ import numpy as np
 import pretty_midi
 
 
+def violin_performance_events(notes, tempo_bpm):
+    """Use approved Solo bow/expression decisions on the existing Band line.
+
+    Preserve Band canonical pitches, attack times and releases so its cursor
+    and notation stay aligned. No source-note selection or additions here.
+    """
+    from dataclasses import replace
+    from solo_violin_performance import plan_violin_v3_1, event_dicts
+    seconds_per_beat = 60.0 / tempo_bpm
+    source = sorted((pretty_midi.Note(
+        int(event['velocity']), pretty_midi.note_name_to_number(pitch),
+        float(event['offset']) * seconds_per_beat,
+        (float(event['offset']) + float(event['duration'])) * seconds_per_beat)
+        for event in notes for pitch in event['pitches']),
+        key=lambda note: (note.start, note.pitch))
+    planned, diagnostics = plan_violin_v3_1(source)
+    planned = [replace(event, onset=event.source_onset,
+                       duration=event.source_duration) for event in planned]
+    return planned, event_dicts(planned), diagnostics
+
+
 def coordinate_band(parts):
     """Balance overlapping parts without changing any pitch, attack or release."""
     leads = [(n.start, n.end, n.pitch) for result, midi, _ in parts

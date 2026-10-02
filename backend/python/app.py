@@ -1852,30 +1852,28 @@ def _render_band_part_audio(render_part, output_path, tempo_bpm):
     """Best-effort isolated playback; notation generation must remain usable."""
     try:
         if render_part['instrument'] == 'Violin' and render_part.get('is_band'):
-            events = []
-            for event in render_part['notes']:
-                for pitch_name in event['pitches']:
-                    duration = event['duration'] * 60.0 / tempo_bpm
-                    events.append({
-                        'onset': event['offset'] * 60.0 / tempo_bpm,
-                        'duration': duration, 'pitch': pitch_to_midi(pitch_name),
-                        'velocity': event['velocity'],
-                        'articulation': 'detached' if duration < .18 else 'sustain',
-                        'expression_curve': [(0., event['velocity'] / 127.),
-                                             (1., event['velocity'] / 127.)],
-                        'vibrato_delay': None,
-                    })
-            events.sort(key=lambda e: (e['onset'], e['pitch']))
-            try:
-                with tempfile.TemporaryDirectory(prefix='augment_band_violin_') as folder:
+            from band_performance import violin_performance_events
+            from solo_violin_performance import violin_events_to_midi
+            planned, events, diagnostics = violin_performance_events(
+                render_part['notes'], tempo_bpm)
+            render_part['performance_diagnostics'] = diagnostics
+            with tempfile.TemporaryDirectory(prefix='augment_band_violin_') as folder:
+                try:
                     plan = os.path.join(folder, 'band_violin.json')
                     with open(plan, 'w', encoding='utf-8') as handle:
                         json.dump({'events': events}, handle)
                     rendered = _render_solo_violin_vpo(plan, output_path)
-                render_part['renderer_used'] = 'VPO Performance Orchestra (sfizz)'
-                return rendered
-            except Exception as exc:
-                print(f'[band_violin] VPO unavailable; using configured SF2: {exc}', flush=True)
+                    if not rendered[0]:
+                        raise RuntimeError('VPO did not produce audio')
+                    render_part['renderer_used'] = 'VPO Performance Orchestra (sfizz) / Solo phrasing'
+                    return rendered
+                except Exception as exc:
+                    print(f'[band_violin] VPO unavailable; using Solo SF2 fallback: {exc}', flush=True)
+                    midi_path = os.path.join(folder, 'band_violin.mid')
+                    violin_events_to_midi(planned, midi_path)
+                    rendered = _render_solo_violin_v3_1(midi_path, output_path)
+                    render_part['renderer_used'] = 'Violin Real 2026.SF2 / Solo phrasing (fallback)'
+                    return rendered
         render_part['renderer_used'] = 'FluidSynth / instrument SoundFont'
         return parts_to_wav(
             [render_part], output_path, tempo_bpm=tempo_bpm)
@@ -1910,10 +1908,13 @@ def _mix_band_part_audio(rendered_parts, output_path, sample_rate=44100):
         if int(rate) != int(sample_rate):
             return False, 0.0
         source_dtype = samples.dtype
-        if samples.ndim > 1:
-            samples = samples.astype(np.float64).mean(axis=1)
-        else:
-            samples = samples.astype(np.float64)
+        samples = samples.astype(np.float64)
+        if samples.ndim == 1:
+            samples = np.column_stack((samples, samples))
+        elif samples.ndim == 2 and samples.shape[1] == 1:
+            samples = np.repeat(samples, 2, axis=1)
+        elif samples.ndim != 2 or samples.shape[1] != 2:
+            return False, 0.0
         if np.issubdtype(source_dtype, np.integer):
             samples /= float(np.iinfo(source_dtype).max)
         # Match perceived level without boosting quiet/noisy stems indefinitely.
@@ -1925,7 +1926,7 @@ def _mix_band_part_audio(rendered_parts, output_path, sample_rate=44100):
                        if active_level > .01 else 1.)
         decoded.append((samples, role_gain.get(item.get('role', ''), 0.72) * calibration))
     maximum_length = max(len(samples) for samples, _ in decoded)
-    mix = np.zeros(maximum_length, dtype=np.float64)
+    mix = np.zeros((maximum_length, 2), dtype=np.float64)
     for samples, gain in decoded:
         mix[:len(samples)] += samples * gain
     peak = float(np.max(np.abs(mix))) if len(mix) else 0.0
@@ -2022,7 +2023,8 @@ def health():
                     'flute_melody_accuracy': 'flute_consensus_pitch_v1',
                     'flute_short_releases': 'source_duration_v1',
                     'saxophone_performance': 'source_faithful_monophonic_v1',
-                    'band_performance': 'source_coordinated_v1'})
+                    'band_performance': 'source_coordinated_v1',
+                    'band_violin_playback': 'solo_phrasing_stereo_v1'})
 
 
 _VOICE_RANGES = [
