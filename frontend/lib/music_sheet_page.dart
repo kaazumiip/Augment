@@ -1593,7 +1593,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       final notationColor = darkScore ? '#FFFFFF' : '#000000';
       final isFullBandView = _bandViews.isNotEmpty && _selectedBandView == 0;
       final scoreZoom = isFullBandView
-          ? (isSmallScreen ? 0.58 : 0.72)
+          ? (isSmallScreen ? 0.38 : 0.48)
           : (isSmallScreen ? 0.46 : 0.60);
       final html = '''
 <!DOCTYPE html>
@@ -1604,7 +1604,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; background: $scoreBackground; color: $notationColor; overflow: auto; -webkit-overflow-scrolling: touch; }
-    #osmdContainer { width: 100%; min-height: 100%; padding: 2px; position: relative; background: $scoreBackground; }
+    #osmdContainer { width: 100%; ${isFullBandView ? 'min-width: 960px;' : ''} min-height: 100%; padding: ${isFullBandView ? '12px' : '2px'}; position: relative; background: $scoreBackground; }
     #osmdContainer svg { background: $scoreBackground !important; }
     #bandInstrumentRoster { display: none; padding: 8px 10px 4px; gap: 6px; flex-wrap: wrap; font-family: sans-serif; }
     #bandInstrumentRoster span { border: 1px solid #888; border-radius: 999px; padding: 3px 8px; font-size: 11px; color: $notationColor; }
@@ -1901,7 +1901,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
             defaultColorTitle: '$notationColor',
             // Use a real portrait score page so the staff spacing and line
             // breaks match conventional engraved sheet music.
-            pageFormat: '${isFullBandView ? 'A4_L' : 'A4_P'}',
+            pageFormat: '${isFullBandView ? 'Endless' : 'A4_P'}',
           });
         }
         await window.osmd.load(data);
@@ -1909,13 +1909,25 @@ class _MusicSheetPageState extends State<MusicSheetPage>
         if (window.osmd.EngravingRules) {
           window.osmd.EngravingRules.RenderPartNames = fullBandScore;
           window.osmd.EngravingRules.RenderPartAbbreviations = fullBandScore;
+          if (fullBandScore) {
+            // Leave room for ledger lines, ties and tall rhythmic groups.
+            // These are engraving distances, not a CSS stretch of the score.
+            window.osmd.EngravingRules.BetweenStaffDistance = 8;
+            window.osmd.EngravingRules.MinSkyBottomDistBetweenStaves = 3;
+            window.osmd.EngravingRules.MinimumDistanceBetweenSystems = 12;
+            window.osmd.EngravingRules.MinSkyBottomDistBetweenSystems = 8;
+          }
         }
         if (window.osmd.DrawingParameters) {
           window.osmd.DrawingParameters.DrawPartNames = fullBandScore;
         }
         // A compact page view keeps the complete grand-staff system visible
         // on a phone while preserving the airy layout of a printed score.
-        window.osmd.zoom = $scoreZoom;
+        // Use a wide conductor canvas with compact notation and horizontal
+        // scrolling on phones. Native SVG coordinates preserve cursor alignment.
+        window.osmd.zoom = fullBandScore
+          ? 0.48
+          : $scoreZoom;
         window.osmd.render();
         ensurePlayhead();
         if (fullBandScore) {

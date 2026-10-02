@@ -3303,6 +3303,30 @@ def _band_staff_from_part(result, grid):
                 destination.insert(offset, copied)
     # Flattening source voices must not turn overlapping holds into an
     # overfull sequential measure. Reallocate independent conductor voices.
+    # Identical written attacks/releases belong to one chord, not a separate
+    # stem/rest lane per pitch. Keep different holds and tie states separate.
+    pitched_groups = {}
+    for event in list(destination.notes):
+        if not isinstance(event, (note.Note, chord.Chord)):
+            continue
+        event_notes = list(event.notes) if isinstance(event, chord.Chord) else [event]
+        tie_states = tuple(sorted({getattr(n.tie, 'type', None) or ''
+                                   for n in event_notes}))
+        key = (event.offset, event.duration.quarterLength, tie_states)
+        pitched_groups.setdefault(key, []).append(event)
+    for (offset, _, _), group in pitched_groups.items():
+        if len(group) < 2:
+            continue
+        members = [deepcopy(n) for event in group
+                   for n in (event.notes if isinstance(event, chord.Chord) else [event])]
+        # Do not merge genuine unisons from independent voices.
+        if len({n.pitch.midi for n in members}) != len(members):
+            continue
+        combined_chord = chord.Chord(members)
+        combined_chord.duration = deepcopy(group[0].duration)
+        for event in group:
+            destination.remove(event)
+        destination.insert(offset, combined_chord)
     events = sorted(list(destination.notes), key=lambda n: float(n.offset))
     voices = []
     for event in events:

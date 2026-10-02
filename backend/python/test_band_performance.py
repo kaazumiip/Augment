@@ -22,6 +22,23 @@ def midi_with(notes, program=73):
 
 
 class BandPerformanceTests(unittest.TestCase):
+    def test_conductor_simultaneous_pitches_share_a_chord(self):
+        from music21 import stream, note, chord
+        from transcribe_pipeline import _band_staff_from_part
+        source = stream.Score()
+        part = stream.Part()
+        for pitch in (60, 64, 67):
+            part.insert(0, note.Note(pitch, quarterLength=1))
+        source.insert(0, part)
+        with patch('transcribe_pipeline.music21.converter.parse', return_value=source):
+            staff = _band_staff_from_part(dict(instrument='Piano', role='harmony',
+                                              musicxml='unused'), Grid(120, '4/4', 'C'))
+        events = list(staff.recurse().notes)
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], chord.Chord)
+        self.assertEqual(sorted(p.midi for p in events[0].pitches), [60, 64, 67])
+        self.assertEqual(events[0].duration.quarterLength, 1)
+
     def test_export_retry_does_not_repeat_the_failing_notation_pass(self):
         from music21 import stream, note, meter
         from music21.musicxml.xmlObjects import MusicXMLExportException

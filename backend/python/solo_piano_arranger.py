@@ -283,6 +283,32 @@ def arrange_pianist_v2(baseline_midi_path, output_midi_path, grid):
     }
 
 
+def balance_protected_piano_melody(midi):
+    """Balance only explicitly labelled lead/support; never infer or edit notes."""
+    leads = [t for t in midi.instruments if 'isolated melody' in t.name.lower()]
+    melody = [n for t in leads for n in t.notes]
+    adjusted = 0
+    for track in midi.instruments:
+        if track in leads or not any(label in track.name.lower() for label in
+                                    ('left hand', 'right hand support')):
+            continue
+        for support in track.notes:
+            active = [n for n in melody
+                      if n.start < support.end and n.end > support.start]
+            if not active:
+                continue
+            # Several quieter notes can collectively mask a single lead.
+            # Include sustained lead notes, not only nearby lead attacks.
+            cap = max(35, min(n.velocity for n in active) -
+                      (22 if 'right hand support' in track.name.lower() else 26))
+            if support.velocity > cap:
+                support.velocity = cap
+                adjusted += 1
+    return {'protected_melody_notes': len(melody),
+            'support_notes_softened': adjusted,
+            'notes_added': 0, 'notes_removed': 0}
+
+
 def perform_pianist_v2_1(arrangement_midi_path, output_midi_path, grid):
     """Perform the frozen V2 arrangement without changing its musical notes.
 
@@ -596,6 +622,7 @@ def perform_pianist_v2_2(arrangement_midi_path, v2_1_midi_path,
     for track in output.instruments:
         track.notes.sort(key=lambda note: (note.start, note.pitch))
         track.control_changes.sort(key=lambda cc: cc.time)
+    melody_balance = balance_protected_piano_melody(output)
     output.write(output_midi_path)
 
     # Pair by pitch again so a micro-spread cannot corrupt the timing audit.
@@ -659,6 +686,7 @@ def perform_pianist_v2_2(arrangement_midi_path, v2_1_midi_path,
         'intentional_rolled_chords': spreads,
         'repeated_note_expression_changes': repeats,
         'dense_chord_compensation_events': dense_compensation,
+        'protected_melody_balance': melody_balance,
         'phrase_count': len(phrases),
     }
 
