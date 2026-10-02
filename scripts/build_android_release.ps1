@@ -9,7 +9,8 @@ Example:
 param(
   [ValidatePattern('^https://')]
   [string]$ApiUrl = 'https://augment-production-f590.up.railway.app',
-  [switch]$Publish
+  [switch]$Publish,
+  [switch]$SkipBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,8 +34,10 @@ try {
     throw 'App version must include a build number for update checks.'
   }
   $releaseBuild = $Matches[1]
-  flutter build apk --release --split-per-abi "--dart-define=AUGMENT_API_URL=$apiUrl" "--dart-define=AUGMENT_APP_BUILD=$releaseBuild"
-  if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed.' }
+  if (-not $SkipBuild) {
+    flutter build apk --release --split-per-abi "--dart-define=AUGMENT_API_URL=$apiUrl" "--dart-define=AUGMENT_APP_BUILD=$releaseBuild"
+    if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed.' }
+  }
 } finally {
   Pop-Location
 }
