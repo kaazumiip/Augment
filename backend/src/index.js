@@ -58,11 +58,13 @@ const generationReservations = new Map();
 const sessions = new Map();
 const firebaseServiceAccountFile = path.join(__dirname, '..', 'firebase-service-account.json');
 let firebaseAuth = null;
+let verificationSigningKey = null;
 
 if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || fs.existsSync(firebaseServiceAccountFile)) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
       fs.readFileSync(firebaseServiceAccountFile, 'utf8'));
+    verificationSigningKey = serviceAccount.private_key;
     if (getApps().length === 0) {
       initializeApp({ credential: cert(serviceAccount) });
     }
@@ -1147,6 +1149,17 @@ async function sendResendEmail({ to, subject, html, text }) {
   );
 }
 
+async function sendVerificationEmail({ to, subject, html, text }) {
+  if (!verificationSigningKey) throw new Error('Verification email signing is not configured.');
+  const payload = JSON.stringify({ audience: 'augment-verification-email',
+    timestamp: Date.now(), nonce: crypto.randomBytes(16).toString('hex'),
+    to, subject, html, text });
+  const signature = crypto.sign('RSA-SHA256', Buffer.from(payload), verificationSigningKey).toString('base64');
+  await axios.post('https://augment-landing.vercel.app/api/send-verification', { payload }, {
+    headers: { 'x-augment-signature': signature }, timeout: 30000,
+  });
+}
+
 app.post('/api/auth/send-verification-code', async (req, res) => {
   if (!firebaseAuth) return res.status(503).json({ error: 'Firebase Admin is not configured.' });
   const token = getBearerToken(req);
@@ -1178,7 +1191,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
       purpose: 'email',
     });
     try {
-      await sendResendEmail({ to: user.email, ...message });
+      await sendVerificationEmail({ to: user.email, ...message });
     } catch (error) {
       emailVerificationCodes.delete(user.uid);
       throw error;
@@ -1245,7 +1258,7 @@ app.post('/api/auth/send-password-code', async (req, res) => {
       code,
       purpose: 'password',
     });
-    await sendResendEmail({ to: email, ...message });
+    await sendVerificationEmail({ to: email, ...message });
     passwordResetLastSent.set(key, now);
   } catch (error) {
     if (error.code !== 'auth/user-not-found') {
@@ -1543,7 +1556,11 @@ app.get('/', (req, res) => {
 app.get('/api/health', async (req, res) => {
   try {
     const response = await pythonRequest('get', '/api/health');
-    res.json({ node: 'ok', python: response.data });
+    res.json({ node: 'ok', python: response.data,
+      verification_email: { provider: 'vercel-gmail', configured: Boolean(verificationSigningKey),
+        signer_fingerprint: verificationSigningKey ? crypto.createHash('sha256').update(
+          crypto.createPublicKey(verificationSigningKey).export({type:'spki',format:'der'})
+        ).digest('hex') : null } });
   } catch (error) {
     res.json({ node: 'ok', python: 'unavailable', message: 'Start Python backend on port 5000' });
   }
