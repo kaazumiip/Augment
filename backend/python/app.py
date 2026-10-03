@@ -2048,7 +2048,7 @@ def health():
                     'saxophone_performance': 'source_faithful_monophonic_v1',
                     'band_performance': 'source_coordinated_v1',
                     'generation_json': 'numpy_native_v1',
-                    'electric_guitar_performance': 'physical_performance_v1',
+                    'electric_guitar_performance': 'clean_picked_v1',
                     'band_violin_playback': 'solo_phrasing_stereo_v1'})
 
 

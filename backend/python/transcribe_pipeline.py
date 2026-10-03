@@ -1916,14 +1916,8 @@ def _transcribe_solo_guitar_cover(stem_dir, midi_path, duration, grid, instrumen
             fallback_melody_notes=len(fallback_notes),
         )
         if instrument_name == 'Electric Guitar':
-            # Reuse the validated physical performance, not the classical
-            # sample source. Program changes never alter canonical events.
-            electric_midi = pretty_midi.PrettyMIDI(midi_path)
-            for track in electric_midi.instruments:
-                track.program = 27
-                track.name = 'Solo Electric Guitar unified performance'
-            electric_midi.write(midi_path)
-            arrangement['electric_guitar_version'] = 'physical_performance_v1'
+            from solo_electric_guitar_performance import apply_clean_electric_performance
+            arrangement.update(apply_clean_electric_performance(midi_path))
     if not arrangement['notes']:
         raise ValueError('No defensible Solo Guitar material was found.')
     return {
