@@ -566,7 +566,11 @@ function processingEstimate(job) {
   const [start, stage] = phases[phaseIndex];
   const nextStart = phases[phaseIndex + 1]?.[0] || start + 300;
   const phaseProgress = Math.min(1, Math.max(0, (elapsedSeconds - start) / (nextStart - start)));
-  const progress = Math.min(95, Math.round(8 + phaseIndex * 20 + phaseProgress * 20));
+  const progress = Math.max(job.progress || 0,
+    Math.min(95, Math.round(8 + phaseIndex * 20 + phaseProgress * 20)));
+  // Keep the per-job high-water mark across status polls. This is still an
+  // elapsed-time estimate, not measured model completion.
+  job.progress = progress;
   return { ...job, stage, progress, progress_is_estimate: true };
 }
 

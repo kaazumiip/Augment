@@ -555,66 +555,37 @@ class MarketplaceHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 600) {
-        final narrow = constraints.maxWidth < 320;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      final fontSize = (constraints.maxWidth * .065).clamp(18.0, 40.0);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(
-              width: double.infinity,
-              height: narrow ? 190 : 230,
-              child: Image.asset(
-                'assets/marketplace_banner.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
+            Expanded(
+              child: Text(
+                'Music,\nSheet and Lyric\nfor everyone',
+                style: TextStyle(
+                  fontFamily: _MarketplacePageState._font,
+                  fontSize: fontSize,
+                  height: 1.08,
+                  fontWeight: FontWeight.w800,
+                  color: AppPalette.text(context),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Music,\nSheet and Lyric\nfor everyone',
-              style: TextStyle(
-                fontFamily: _MarketplacePageState._font,
-                fontSize: narrow ? 30 : 36,
-                height: 1.08,
-                fontWeight: FontWeight.w800,
-                color: AppPalette.text(context),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.05,
+                child: Image.asset(
+                  'assets/marketplace_banner.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                ),
               ),
             ),
           ],
-        );
-      }
-      final compact = MediaQuery.of(context).size.width <= 360;
-      return SizedBox(
-        height: compact ? 320 : 360,
-        child: Stack(children: [
-          Positioned(
-              left: 12,
-              top: compact ? 112 : 126,
-              child: SizedBox(
-                  width: compact ? 150 : 300,
-                  child: Text(
-                      compact
-                          ? 'Music,\nSheet\nand\nLyric for\neveryone'
-                          : 'Music,\nSheet and Lyric\nfor everyone',
-                      style: TextStyle(
-                          fontFamily: _MarketplacePageState._font,
-                          fontSize: compact ? 30 : 40,
-                          height: compact ? .84 : 1.0,
-                          letterSpacing: 0,
-                          fontWeight: FontWeight.w800,
-                          color: AppPalette.text(context))))),
-          Positioned(
-            right: compact ? -24 : 0,
-            top: 16,
-            child: Image.asset(
-              'assets/marketplace_banner.png',
-              width: compact ? 280 : 360,
-              height: compact ? 240 : 296,
-              fit: BoxFit.contain,
-              alignment: Alignment.topCenter,
-            ),
-          ),
-        ]),
+        ),
       );
     });
   }

@@ -28,7 +28,9 @@ void main() {
         final image = tester.getRect(find.byType(Image));
         final text =
             tester.getRect(find.text('Music,\nSheet and Lyric\nfor everyone'));
-        expect(image.bottom, lessThanOrEqualTo(text.top));
+        expect(image.center.dy, closeTo(text.center.dy, .1));
+        expect(text.right, lessThanOrEqualTo(image.left));
+        expect(image.right, lessThanOrEqualTo(width));
         expect(text.right, lessThanOrEqualTo(width));
       });
     }

@@ -72,7 +72,7 @@ class GenerationState extends ChangeNotifier {
 
       if (source == 'link' && fileUrl != null) {
         statusText = 'Processing link...';
-        progress = 0.05;
+        progress = 0.0;
         notifyListeners();
         final response = await _postJsonWithFallback(
           '/api/sheet/generate-url',
@@ -105,12 +105,9 @@ class GenerationState extends ChangeNotifier {
           return;
         }
         statusText = 'Uploading file...';
-        progress = 0.05;
+        progress = 0.0;
         notifyListeners();
         final file = File(filePath);
-        statusText = 'Generating sheet music...';
-        progress = 0.10;
-        notifyListeners();
         final streamedResponse = await _sendMultipartWithFallback(
           '/api/sheet/generate',
           file,
@@ -338,7 +335,10 @@ class GenerationState extends ChangeNotifier {
           final job = jsonDecode(response.body) as Map<String, dynamic>;
           final serverProgress = (job['progress'] as num?)?.toDouble();
           if (serverProgress != null) {
-            progress = (serverProgress / 100).clamp(0.0, 0.95);
+            final nextProgress = (serverProgress / 100).clamp(0.0, 0.95);
+            if (nextProgress.isFinite && nextProgress > progress) {
+              progress = nextProgress;
+            }
             statusText = job['stage']?.toString() ?? 'Processing audio';
             notifyListeners();
           }
