@@ -58,6 +58,25 @@ from Git. Publish them through release assets or provision them separately.
 Review Android production signing before a public release: the current build
 configuration uses debug signing.
 
+## Verification email delivery
+
+Account verification and password verification codes use the landing project's
+Vercel Function at `/api/send-verification`, then Gmail SMTP. Configure
+`GMAIL_USER=evolveapporg@gmail.com` and `GMAIL_APP_PASSWORD` privately in Vercel
+Production. Never expose these values through frontend variables or Git.
+
+Railway generates and validates codes. It signs short-lived email requests
+using its existing Firebase service-account RSA credential; Vercel holds only
+the pinned public verification key in `landing/lib/email-relay-auth.cjs`.
+Rotating that service-account key requires updating the pinned public key too.
+There is no unauthenticated email-send route or automatic Resend fallback for
+verification codes. Other existing transactional email paths still use Resend.
+
+The Node health endpoint reports the delivery provider and public-key
+fingerprint. Test delivery after deployment; Gmail accepting a message does not
+guarantee Inbox placement. In-memory replay protection is instance-local, not a
+distributed idempotency guarantee.
+
 ## Security
 
 The testing redeem code and simulated card flows need review before a public,
