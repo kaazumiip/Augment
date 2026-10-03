@@ -1017,9 +1017,6 @@ class _ComposerCard extends StatelessWidget {
       // Medium phones keep the compact one-row tool bar. Only the smallest
       // cards switch to two rows so their touch targets never get squeezed.
       final twoColumnTools = constraints.maxWidth < 300;
-      final horizontalPadding = compact ? 24.0 : 32.0;
-      final toolWidth = ((constraints.maxWidth - horizontalPadding - 8) / 2)
-          .clamp(0.0, double.infinity);
       final tools = [
         _ComposerTool(
           icon: Icons.camera_alt_rounded,
@@ -1116,15 +1113,20 @@ class _ComposerCard extends StatelessWidget {
               ),
               SizedBox(height: compact ? 16 : 26),
               if (twoColumnTools)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: tools
-                      .map((tool) => SizedBox(
-                            width: toolWidth,
-                            child: tool,
-                          ))
-                      .toList(growable: false),
+                Column(
+                  children: [
+                    Row(children: [
+                      Expanded(child: tools[0]),
+                      const SizedBox(width: 8),
+                      Expanded(child: tools[1]),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(child: tools[2]),
+                      const SizedBox(width: 8),
+                      Expanded(child: tools[3]),
+                    ]),
+                  ],
                 )
               else
                 Row(
@@ -1627,28 +1629,28 @@ class _PollAttachmentState extends State<_PollAttachment> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF292929),
+        color: AppPalette.isDark(context) ? const Color(0xFF292929) : Colors.transparent,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(hasVoted || _ended ? 'POLL RESULTS' : 'COMMUNITY POLL',
-            style: const TextStyle(
-                color: Color(0xFFABABAB),
+            style: TextStyle(
+                color: AppPalette.muted(context),
                 fontSize: 9,
                 letterSpacing: 1.5,
                 fontWeight: FontWeight.w800)),
         if (widget.question.trim().isNotEmpty) ...[
           const SizedBox(height: 7),
           Text(widget.question.trim(),
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: AppPalette.text(context),
                   fontSize: 16,
                   height: 1.22,
                   fontWeight: FontWeight.w800)),
         ],
         const SizedBox(height: 6),
         Text('Created by ${widget.author}',
-            style: const TextStyle(color: Color(0xFFABABAB), fontSize: 10.5)),
+            style: TextStyle(color: AppPalette.muted(context), fontSize: 10.5)),
         const SizedBox(height: 22),
         for (var index = 0; index < widget.options.length; index++)
           Padding(
@@ -1678,20 +1680,20 @@ class _PollAttachmentState extends State<_PollAttachment> {
           ),
         const SizedBox(height: 12),
         Row(children: [
-          const Icon(Icons.people_alt_outlined,
-              size: 14, color: Color(0xFFABABAB)),
+          Icon(Icons.people_alt_outlined,
+              size: 14, color: AppPalette.muted(context)),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
                 '$totalVotes ${totalVotes == 1 ? 'person' : 'people'} voted',
                 style:
-                    const TextStyle(color: Color(0xFFABABAB), fontSize: 10.5)),
+                    TextStyle(color: AppPalette.muted(context), fontSize: 10.5)),
           ),
-          const Icon(Icons.schedule_rounded,
-              size: 13, color: Color(0xFFABABAB)),
+          Icon(Icons.schedule_rounded,
+              size: 13, color: AppPalette.muted(context)),
           const SizedBox(width: 4),
           Text(widget.endsAt == null ? 'Open poll' : _timeLabel,
-              style: const TextStyle(color: Color(0xFFABABAB), fontSize: 10.5)),
+              style: TextStyle(color: AppPalette.muted(context), fontSize: 10.5)),
         ]),
       ]),
     );
@@ -1751,7 +1753,7 @@ class _PollChoice extends StatelessWidget {
           height: 42,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xFF292929),
+            color: AppPalette.isDark(context) ? const Color(0xFF292929) : Colors.transparent,
             borderRadius: BorderRadius.circular(99),
             border: Border.all(color: accent.withValues(alpha: .86), width: 1),
           ),
@@ -1771,8 +1773,8 @@ class _PollChoice extends StatelessWidget {
                   SizedBox(
                     width: 54,
                     child: Text('$percentage%',
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: AppPalette.isDark(context) ? Colors.white : AppPalette.text(context),
                             fontSize: 10,
                             fontWeight: FontWeight.w800)),
                   ),
@@ -1781,8 +1783,8 @@ class _PollChoice extends StatelessWidget {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.white,
+                      style: TextStyle(
+                          color: AppPalette.text(context),
                           fontSize: 11,
                           fontWeight: FontWeight.w700)),
                 ),

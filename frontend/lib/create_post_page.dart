@@ -8,14 +8,19 @@ import 'social_service.dart';
 import 'social_profile_page.dart';
 
 class _PollDraft {
-  const _PollDraft({required this.choices, required this.duration});
+  const _PollDraft(
+      {required this.question, required this.choices, required this.duration});
+  final String question;
   final List<String> choices;
   final Duration duration;
 }
 
 class _PollDialog extends StatefulWidget {
   const _PollDialog(
-      {required this.initialChoices, required this.initialDuration});
+      {required this.initialQuestion,
+      required this.initialChoices,
+      required this.initialDuration});
+  final String initialQuestion;
   final List<String> initialChoices;
   final Duration initialDuration;
 
@@ -26,11 +31,13 @@ class _PollDialog extends StatefulWidget {
 class _PollDialogState extends State<_PollDialog> {
   static const red = Color(0xFFCA000A);
   late final List<TextEditingController> _options;
+  late final TextEditingController _question;
   late Duration _duration;
 
   @override
   void initState() {
     super.initState();
+    _question = TextEditingController(text: widget.initialQuestion);
     _duration = widget.initialDuration;
     final count = widget.initialChoices.length.clamp(2, 4);
     _options = List.generate(
@@ -44,7 +51,8 @@ class _PollDialogState extends State<_PollDialog> {
 
   bool get _valid {
     final values = _options.map((item) => item.text.trim()).toList();
-    return values.every((value) => value.isNotEmpty) &&
+    return _question.text.trim().isNotEmpty &&
+        values.every((value) => value.isNotEmpty) &&
         values.map((value) => value.toLowerCase()).toSet().length ==
             values.length;
   }
@@ -63,6 +71,7 @@ class _PollDialogState extends State<_PollDialog> {
 
   @override
   void dispose() {
+    _question.dispose();
     for (final controller in _options) {
       controller.dispose();
     }
@@ -103,6 +112,27 @@ class _PollDialogState extends State<_PollDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  TextField(
+                    controller: _question,
+                    autofocus: true,
+                    maxLength: 200,
+                    maxLines: 3,
+                    minLines: 1,
+                    onChanged: (_) => setState(() {}),
+                    style: TextStyle(color: AppPalette.text(context)),
+                    cursorColor: red,
+                    decoration: InputDecoration(
+                      labelText: 'Poll question',
+                      hintText: 'What would you like to ask?',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: red, width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text('Add between two and four choices.',
                       style: TextStyle(
                           color: AppPalette.muted(context), fontSize: 14)),
@@ -114,7 +144,7 @@ class _PollDialogState extends State<_PollDialog> {
                           Expanded(
                             child: TextField(
                               controller: _options[i],
-                              autofocus: i == 0,
+                              autofocus: false,
                               maxLength: 80,
                               buildCounter: (_,
                                       {required currentLength,
@@ -240,6 +270,7 @@ class _PollDialogState extends State<_PollDialog> {
   void _submit() => Navigator.pop(
         context,
         _PollDraft(
+          question: _question.text.trim(),
           choices:
               _options.map((controller) => controller.text.trim()).toList(),
           duration: _duration,
@@ -363,6 +394,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final draft = await showDialog<_PollDraft>(
       context: context,
       builder: (_) => _PollDialog(
+        initialQuestion: _controller.text,
         initialChoices: _pollChoices,
         initialDuration: _pollDuration,
       ),
@@ -374,6 +406,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         .toList();
     if (clean.length < 2) return;
     setState(() {
+      _controller.text = draft.question;
       _pollChoices = clean;
       _pollDuration = draft.duration;
       _files = const [];

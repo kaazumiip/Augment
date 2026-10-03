@@ -555,7 +555,7 @@ class MarketplaceHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final fontSize = (constraints.maxWidth * .065).clamp(18.0, 40.0);
+      final fontSize = (constraints.maxWidth * .085).clamp(23.0, 40.0);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
@@ -573,14 +573,18 @@ class MarketplaceHero extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: AspectRatio(
-                aspectRatio: 1.05,
-                child: Image.asset(
-                  'assets/marketplace_banner.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
+                aspectRatio: .82,
+                child: ClipRect(
+                  // The asset has a large transparent left margin. Crop that
+                  // margin inside its own column, never over the banner text.
+                  child: Image.asset(
+                    'assets/marketplace_banner.png',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.centerRight,
+                  ),
                 ),
               ),
             ),
