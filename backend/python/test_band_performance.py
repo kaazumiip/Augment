@@ -22,6 +22,33 @@ def midi_with(notes, program=73):
 
 
 class BandPerformanceTests(unittest.TestCase):
+    def test_rock_balance_preserves_notes_and_rhythm(self):
+        configs = [('Electric Guitar', 'melody', [(72,0,1,80)]),
+                   ('Guitar', 'harmony', [(72,0,1,80),(48,2,3,60)]),
+                   ('Cello', 'bass', [(36,0,1,80)]),
+                   ('Drums', 'drums', [(36,0,.1,90),(38,.5,.6,85),(42,0,.1,80)])]
+        parts = [({'id': name, 'instrument': name, 'role': role}, midi_with(notes), '')
+                 for name, role, notes in configs]
+        identities = [[(n.pitch,n.start,n.end) for n in m.instruments[0].notes]
+                      for _,m,_ in parts]
+        report = coordinate_band(parts)
+        self.assertEqual(identities, [[(n.pitch,n.start,n.end)
+                                      for n in m.instruments[0].notes] for _,m,_ in parts])
+        self.assertGreater(parts[0][1].instruments[0].notes[0].velocity, 80)
+        self.assertLess(parts[1][1].instruments[0].notes[0].velocity,80)
+        self.assertEqual(parts[1][1].instruments[0].notes[1].velocity,60)
+        self.assertEqual(parts[3][1].instruments[0].notes[0].velocity,90)
+        self.assertEqual(parts[3][1].instruments[0].notes[1].velocity,85)
+        self.assertLess(parts[3][1].instruments[0].notes[2].velocity,80)
+        self.assertEqual(report['Electric Guitar']['rock']['notes_removed'],0)
+
+    def test_rock_pass_does_not_modify_jazz(self):
+        from band_performance import coordinate_rock_lineup
+        parts = [({'id':'lead','instrument':'Saxophone','role':'melody'},
+                  midi_with([(72,0,1,80)]),'')]
+        self.assertEqual(coordinate_rock_lineup(parts),{})
+        self.assertEqual(parts[0][1].instruments[0].notes[0].velocity,80)
+
     def test_conductor_simultaneous_pitches_share_a_chord(self):
         from music21 import stream, note, chord
         from transcribe_pipeline import _band_staff_from_part

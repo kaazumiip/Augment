@@ -51,6 +51,54 @@ def coordinate_band(parts):
         reports[result['id']] = dict(version='band_coordination_v1',
             harmony_notes_balanced=changed, melody_doubles_softened=duplicates,
             notes_added=0, notes_removed=0, pitches_changed=0, timing_changed=0)
+    rock_reports = coordinate_rock_lineup(parts)
+    for part_id, report in rock_reports.items():
+        reports[part_id]['rock'] = report
+    return reports
+
+
+def coordinate_rock_lineup(parts):
+    """Balance the existing Rock preset without inventing notes or grooves.
+
+    Preset labels are not sent to Python, so activate only for the exact
+    electric lead / acoustic harmony / cello bass / drums configuration.
+    Custom lineups matching this configuration receive the same treatment.
+    """
+    signature = sorted((result.get('instrument'),
+                        'melody' if result['role'] == 'lead' else result['role'])
+                       for result, _, _ in parts)
+    if signature != sorted([('Electric Guitar', 'melody'), ('Guitar', 'harmony'),
+                            ('Cello', 'bass'), ('Drums', 'drums')]):
+        return {}
+    lead = [n for result, midi, _ in parts if result['instrument'] == 'Electric Guitar'
+            for track in midi.instruments for n in track.notes]
+    if not lead:
+        return {}
+    reports = {}
+    for result, midi, _ in parts:
+        changed = 0
+        for track in midi.instruments:
+            for note in track.notes:
+                old = note.velocity
+                active = [n for n in lead if n.start < note.end and n.end > note.start]
+                if result['instrument'] == 'Electric Guitar':
+                    # Preserve relative lead accents, including quiet phrases.
+                    note.velocity = min(116, max(1, round(old * 1.10)))
+                elif active:
+                    if result['instrument'] == 'Guitar':
+                        # Same-register chord backing masks the electric lead.
+                        close = any(abs(n.pitch - note.pitch) <= 7 for n in active)
+                        note.velocity = max(1, round(old * (.80 if close else .90)))
+                    elif result['instrument'] == 'Cello':
+                        note.velocity = max(1, round(old * .92))
+                    elif result['instrument'] == 'Drums':
+                        # Only soften hats/cymbals; retain kick/snare accents.
+                        if note.pitch in {42, 44, 46, 49, 51, 52, 55, 57, 59}:
+                            note.velocity = max(1, round(old * .88))
+                changed += old != note.velocity
+        reports[result['id']] = dict(version='rock_balance_v1',
+            velocities_changed=changed, notes_added=0, notes_removed=0,
+            pitches_changed=0, timing_changed=0)
     return reports
 
 

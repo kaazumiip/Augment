@@ -2047,6 +2047,7 @@ def health():
                     'flute_short_releases': 'source_duration_v1',
                     'saxophone_performance': 'source_faithful_monophonic_v1',
                     'band_performance': 'source_coordinated_v1',
+                    'rock_band_balance': 'rock_balance_v1',
                     'generation_json': 'numpy_native_v1',
                     'electric_guitar_performance': 'clean_picked_v1',
                     'band_violin_playback': 'solo_phrasing_stereo_v1'})
