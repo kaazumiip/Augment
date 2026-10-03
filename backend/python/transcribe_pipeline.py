@@ -1432,6 +1432,21 @@ def _select_supported_piano_lead(lead_source, lead_midi_path, lead_stats, stem_d
     primary_score = lead_stats.get('alignment_confidence')
     if primary_score is not None and primary_score >= .45:
         return lead_source, lead_stats, True
+    # Whole-stem spectral similarity includes harmonics and accompaniment
+    # leakage. A marginal vocal score must not erase locally corroborated
+    # phrases. This fallback never applies to other instruments or stems.
+    if (os.path.basename(lead_source) == 'vocals.wav' and
+            primary_score is not None and .30 <= primary_score < .45):
+        from piano_local_melody_evidence import recover_locally_supported_vocal
+        local = recover_locally_supported_vocal(lead_source, lead_midi_path)
+        lead_stats['local_vocal_evidence'] = local
+        if local['accepted']:
+            lead_stats['notes'] = local['supported_notes']
+            lead_stats['source_selection'] = {
+                'policy': 'locally_validated_vocal_phrases',
+                'selected_source': 'vocals.wav',
+            }
+            return lead_source, lead_stats, True
     candidates = [{'source': os.path.basename(lead_source),
                    'alignment_confidence': primary_score, 'accepted': False}]
     best = None

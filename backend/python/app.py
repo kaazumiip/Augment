@@ -1823,7 +1823,14 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
         # Import the binding through our Windows-safe loader before pretty_midi
         # performs its own lazy import.
         _load_fluidsynth_binding()
-        audio = midi_obj.fluidsynth(fs=sample_rate, sf2_path=soundfont_path)
+        piano_indices = {i for i, part in enumerate(parts)
+                         if part['instrument'] == 'Piano'}
+        if piano_indices:
+            from piano_noteoff_renderer import render_piano_safe
+            audio = render_piano_safe(
+                midi_obj, soundfont_path, sample_rate, piano_indices)
+        else:
+            audio = midi_obj.fluidsynth(fs=sample_rate, sf2_path=soundfont_path)
         if audio is not None and len(audio):
             print(f'[playback] FluidSynth rendered {instrument_names} with {soundfont_path}', flush=True)
     except Exception as exc:
@@ -2034,6 +2041,8 @@ def _safe_write_musicxml(score, output_path):
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'message': 'Sheet music API is running',
+                    'piano_melody_selection': 'local_vocal_phrase_evidence_v1',
+                    'piano_noteoff_ownership': 'same_pitch_safe_v1',
                     'flute_melody_accuracy': 'flute_consensus_pitch_v1',
                     'flute_short_releases': 'source_duration_v1',
                     'saxophone_performance': 'source_faithful_monophonic_v1',
