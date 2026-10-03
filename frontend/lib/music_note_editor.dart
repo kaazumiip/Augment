@@ -5,6 +5,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'sheet_editor_walkthrough.dart';
 
 class EditedMusicSheet {
   const EditedMusicSheet(this.musicXml);
@@ -35,6 +37,28 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
   int? _selectedMeasure;
   int _previewToken = 0;
   bool _editorOpen = false;
+  final bool _showGuide = false;
+  final _tourTargets = List.generate(4, (_) => GlobalKey());
+  bool _tourOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startTour(firstVisit: true));
+  }
+
+  Future<void> _startTour({bool firstVisit = false}) async {
+    if (_tourOpen) return;
+    _tourOpen = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || (firstVisit && prefs.getBool('sheet_editor_tour_v1') == true)) return;
+      await showSheetEditorWalkthrough(context, _tourTargets);
+      await prefs.setBool('sheet_editor_tour_v1', true);
+    } finally {
+      _tourOpen = false;
+    }
+  }
   final List<_EditorSnapshot> _undoStack = [];
   final List<_EditorSnapshot> _redoStack = [];
 
@@ -320,9 +344,15 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
         _selected == null ? -1 : activeEvents.indexOf(_selected!);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sheet studio'),
+        title: const Text('Edit notes'),
         actions: [
           IconButton(
+            tooltip: 'How to edit',
+            onPressed: _startTour,
+            icon: const Icon(Icons.help_outline_rounded),
+          ),
+          IconButton(
+            key: _tourTargets[2],
             tooltip: 'Undo',
             onPressed: _canUndo ? _undo : null,
             icon: const Icon(Icons.undo_rounded),
@@ -333,13 +363,29 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
             icon: const Icon(Icons.redo_rounded),
           ),
           TextButton(
+            key: _tourTargets[3],
             onPressed: () => Navigator.pop(context, EditedMusicSheet(_xml)),
-            child: const Text('Save'),
+            child: const Text('Save & listen'),
           ),
         ],
       ),
       body: Column(children: [
+        if (_showGuide) Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(children: [
+            Image.asset('assets/augment_bunny_mascot_wink.png',
+                width: 48, height: 64, fit: BoxFit.contain,
+                semanticLabel: 'Augment mascot explaining note editing'),
+            const SizedBox(width: 10),
+            const Expanded(child: Text(
+              'Let’s edit! Tap a note, then use Up or Down to change its sound. '
+              'Change its length if needed. Undo reverses a mistake. '
+              'Save & listen updates your sheet and playback.',
+              style: TextStyle(fontSize: 12, height: 1.4))),
+          ]),
+        ),
         _StudioPalette(
+          key: _tourTargets[1],
           enabled: selected != null,
           selectedDuration: selected?.type,
           isRest: selected?.isRest ?? false,
@@ -358,6 +404,7 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
           onSelected: _selectMeasure,
         ),
         _ScoreEventStrip(
+          key: _tourTargets[0],
           notes: _notes,
           selected: _selected,
           eventIndexes: activeEvents,
@@ -479,6 +526,7 @@ window.updateScore=async function(xml){scoreXml=xml;await render(xml)};render(sc
 
 class _StudioPalette extends StatelessWidget {
   const _StudioPalette({
+    super.key,
     required this.enabled,
     required this.selectedDuration,
     required this.isRest,
@@ -687,6 +735,7 @@ class _MeasureStrip extends StatelessWidget {
 /// MusicXML note and rest reachable, including each member of a chord.
 class _ScoreEventStrip extends StatelessWidget {
   const _ScoreEventStrip({
+    super.key,
     required this.notes,
     required this.selected,
     required this.eventIndexes,

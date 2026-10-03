@@ -360,31 +360,30 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     if (!mounted || edited == null || edited.musicXml == _musicXmlContent) {
       return;
     }
-    setState(() {
-      _musicXmlContent = edited.musicXml;
-      _activeResult = Map<String, dynamic>.from(_activeResult)
-        ..['musicxml_content'] = edited.musicXml;
-    });
-    await GeneratedSheetsStore.instance
-        .cacheMusicXml(outputFile: _outputFile, content: edited.musicXml);
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Sheet updated. Updating its playback…'),
+      content: Text('Preparing your edited sheet and playback…'),
       duration: Duration(seconds: 2),
     ));
     final rendered = await _renderEditedScore(edited.musicXml);
     if (!mounted) return;
-    if (rendered == null) {
+    if (rendered == null || rendered['audio_available'] != true) {
       _showPlaybackError(
-          'The sheet was saved, but its updated playback could not be rendered.');
+          'Playback could not be updated. Your previous saved sheet is unchanged. Please try again.');
       return;
     }
     await _audioPlayer?.stop();
     if (!mounted) return;
     setState(() {
+      _musicXmlContent = edited.musicXml;
       _activeResult = Map<String, dynamic>.from(_activeResult)
+        ..remove('musicxml_url')
+        ..remove('audio_url')
+        ..remove('pdf_url')
+        ..remove('sheet_image_url')
+        ..remove('cached_music_xml_path')
         ..addAll(rendered)
         ..['musicxml_content'] = edited.musicXml
+        ..['source_base_url'] = _sheetServerUrl
         ..remove('cached_audio_path');
       _hasPlayed = false;
       _isPlaying = false;
@@ -393,6 +392,14 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           Duration(seconds: _audioDuration.ceil().clamp(1, 600));
       _playController.value = 0;
     });
+    await GeneratedSheetsStore.instance.cacheMusicXml(
+        outputFile: _outputFile, content: edited.musicXml);
+    if (!_savedToMySheets) {
+      await GeneratedSheetsStore.instance.saveGeneratedSheet(
+          instrument: _instrument,
+          result: Map<String, dynamic>.from(_activeResult)..['title'] = _sheetTitle);
+      if (mounted) setState(() => _savedToMySheets = true);
+    }
     await GeneratedSheetsStore.instance.updateSavedResult(
       outputFile: _outputFile,
       result: _activeResult,

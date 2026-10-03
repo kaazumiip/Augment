@@ -226,15 +226,12 @@ class GeneratedSheetsStore extends ChangeNotifier {
     if (synced['musicxml_url'] != null ||
         synced['audio_url'] != null ||
         synced['musicxml_content'] != null) {
-      // The on-device file is the immediate/offline copy. Do not duplicate a
-      // large XML document in SharedPreferences after its cloud artifact is
-      // safely stored.
+      // Retain the score in the saved record as well as its on-device file
+      // so cloud refreshes can show it without a second artifact request.
       final storedResult = Map<String, dynamic>.from(synced)
         ..remove('_pending_title_sync');
       // Audio upload succeeding is not evidence that the score was uploaded.
-      if (synced['musicxml_url'] != null) {
-        storedResult.remove('musicxml_content');
-      }
+      // Keep the score itself as a durable fallback, not just its Storage URL.
       index = _sheets.indexWhere(
           (sheet) => sheet.result['output_file']?.toString() == outputFile);
       if (index < 0) return;
@@ -365,7 +362,13 @@ class GeneratedSheetsStore extends ChangeNotifier {
     if (index < 0) return;
     final existing = _sheets[index];
     final merged = Map<String, dynamic>.from(existing.result)..addAll(result);
-    if (clearCachedAudio) merged.remove('cached_audio_path');
+    if (clearCachedAudio) {
+      // These URLs belong to the previous score revision, not the new render.
+      for (final key in ['cached_audio_path', 'musicxml_url', 'audio_url',
+        'pdf_url', 'sheet_image_url']) {
+        merged.remove(key);
+      }
+    }
     _sheets[index] = SavedSheet(
       title: existing.title,
       instrument: existing.instrument,
@@ -376,6 +379,13 @@ class GeneratedSheetsStore extends ChangeNotifier {
     notifyListeners();
     await _updateRemoteSheet(
         existing.result['remote_project_id']?.toString(), merged);
+    if (clearCachedAudio) {
+      await _syncSavedSheetInBackground(
+        outputFile: outputFile,
+        sourceBaseUrl: merged['source_base_url']?.toString() ?? '',
+        musicXml: merged['musicxml_content']?.toString(),
+      );
+    }
   }
 
   Future<void> delete(SavedSheet sheet) async {
@@ -619,22 +629,14 @@ class GeneratedSheetsStore extends ChangeNotifier {
     final updatedResult = Map<String, dynamic>.from(existing.result);
     if (updatedResult['output_file']?.toString() == outputFile) {
       updatedResult['cached_music_xml_path'] = cachedFile.path;
-      if (updatedResult['musicxml_url'] != null) {
-        updatedResult.remove('musicxml_content');
-      } else {
-        updatedResult['musicxml_content'] = content;
-      }
+      updatedResult['musicxml_content'] = content;
     } else {
       final parts = updatedResult['parts'] as List<dynamic>? ?? const [];
       updatedResult['parts'] = parts.map((value) {
         final part = Map<String, dynamic>.from(value as Map);
         if (part['output_file']?.toString() == outputFile) {
           part['cached_music_xml_path'] = cachedFile.path;
-          if (part['musicxml_url'] != null) {
-            part.remove('musicxml_content');
-          } else {
-            part['musicxml_content'] = content;
-          }
+          part['musicxml_content'] = content;
         }
         return part;
       }).toList();
@@ -706,7 +708,8 @@ class GeneratedSheetsStore extends ChangeNotifier {
       ..remove('_pending_title_sync');
     // Until Storage succeeds, retain the actual score in the saved row.
     // Otherwise a transient upload failure leaves only a temporary filename.
-    if (result['musicxml_url'] != null) cleaned.remove('musicxml_content');
+    // Retain inline MusicXML so reopening does not require another download
+    // and a temporary backend file expiring cannot erase the saved score.
     final parts = cleaned['parts'] as List?;
     if (parts != null) {
       cleaned['parts'] = parts

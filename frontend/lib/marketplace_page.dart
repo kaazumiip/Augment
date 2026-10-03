@@ -555,7 +555,7 @@ class MarketplaceHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final fontSize = (constraints.maxWidth * .085).clamp(23.0, 40.0);
+      final fontSize = (constraints.maxWidth * .075).clamp(21.0, 36.0);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
