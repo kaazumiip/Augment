@@ -556,7 +556,7 @@ class MarketplaceHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final smallest = MediaQuery.sizeOf(context).width < 360;
-      const headingText = 'Music,\nSheets &\nlyrics for\neveryone';
+      const headingText = 'Music,\nSheet\nand\nLyric for\neveryone';
       final fontSize = smallest
           ? (constraints.maxWidth * .075).clamp(18.0, 24.0)
           : (constraints.maxWidth * .075).clamp(21.0, 36.0);
@@ -564,7 +564,7 @@ class MarketplaceHero extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
               flex: 10,
