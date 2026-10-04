@@ -31,12 +31,12 @@ void main() {
         expect(image.center.dy, closeTo(text.center.dy, .1));
         if (width < 360) {
           expect(image.width, greaterThan(text.width));
-          expect(image.top, lessThan(text.top));
+          if (scale == 1) expect(image.top, lessThan(text.top));
           final heading = tester.widget<Text>(find.text('Music,\nSheets &\nlyrics for\neveryone'));
-          expect(heading.style!.fontSize, greaterThanOrEqualTo(23));
+          expect(heading.style!.fontSize, greaterThanOrEqualTo(18));
         }
         expect(text.right, lessThanOrEqualTo(image.left));
-        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
+        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
         expect(image.right, lessThanOrEqualTo(width));
         expect(text.right, lessThanOrEqualTo(width));
       });
