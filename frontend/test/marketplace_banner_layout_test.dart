@@ -27,15 +27,16 @@ void main() {
         expect(tester.takeException(), isNull);
         final image = tester.getRect(find.byType(Image));
         final text =
-            tester.getRect(find.text('Music,\nSheet and Lyric\nfor everyone'));
+            tester.getRect(find.text('Music,\nSheets &\nlyrics for\neveryone'));
         expect(image.center.dy, closeTo(text.center.dy, .1));
         if (width < 360) {
           expect(image.width, greaterThan(text.width));
           expect(image.top, lessThan(text.top));
-          final heading = tester.widget<Text>(find.text('Music,\nSheet and Lyric\nfor everyone'));
+          final heading = tester.widget<Text>(find.text('Music,\nSheets &\nlyrics for\neveryone'));
           expect(heading.style!.fontSize, greaterThanOrEqualTo(23));
         }
         expect(text.right, lessThanOrEqualTo(image.left));
+        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
         expect(image.right, lessThanOrEqualTo(width));
         expect(text.right, lessThanOrEqualTo(width));
       });

@@ -556,6 +556,7 @@ class MarketplaceHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final smallest = MediaQuery.sizeOf(context).width < 360;
+      const headingText = 'Music,\nSheets &\nlyrics for\neveryone';
       final fontSize = smallest
           ? (constraints.maxWidth * .085).clamp(23.0, 28.0)
           : (constraints.maxWidth * .075).clamp(21.0, 36.0);
@@ -564,7 +565,7 @@ class MarketplaceHero extends StatelessWidget {
         final textWidth = (constraints.maxWidth - 8) * 11 / 23;
         final imageWidth = (constraints.maxWidth - 8) * 12 / 23;
         final heading = TextPainter(
-          text: TextSpan(text: 'Music,\nSheet and Lyric\nfor everyone',
+          text: TextSpan(text: headingText,
               style: TextStyle(fontFamily: _MarketplacePageState._font,
                   fontSize: fontSize, height: 1.08, fontWeight: FontWeight.w800)),
           textDirection: Directionality.of(context),
@@ -583,7 +584,7 @@ class MarketplaceHero extends StatelessWidget {
             Expanded(
               flex: smallest ? 11 : 1,
               child: Text(
-                'Music,\nSheet and Lyric\nfor everyone',
+                headingText,
                 style: TextStyle(
                   fontFamily: _MarketplacePageState._font,
                   fontSize: fontSize,
@@ -601,15 +602,11 @@ class MarketplaceHero extends StatelessWidget {
                 // including enlarged accessibility text. Center alignment
                 // puts the text below the artwork's top, not flush with it.
                 aspectRatio: artworkRatio,
-                child: ClipRect(
-                  // The asset has a large transparent left margin. Crop that
-                  // margin inside its own column, never over the banner text.
-                  child: Image.asset(
+                child: Image.asset(
                     'assets/marketplace_banner.png',
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                     alignment: Alignment.centerRight,
                   ),
-                ),
               ),
             ),
           ],
