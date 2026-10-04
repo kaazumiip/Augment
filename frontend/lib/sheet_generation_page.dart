@@ -73,55 +73,8 @@ class SheetGenerationPage extends StatelessWidget {
     }
   }
 
-  void _showUrlDialog(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Paste music link',
-          style: TextStyle(
-              fontFamily: 'Instrument Sans', fontWeight: FontWeight.w800),
-        ),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: 'YouTube link or direct file URL',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          keyboardType: TextInputType.url,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final url = controller.text.trim();
-              if (url.isNotEmpty) {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        ChooseModePage(source: 'link', fileUrl: url),
-                  ),
-                );
-              }
-            },
-            child: const Text('Continue',
-                style: TextStyle(color: Color(0xFFBA0007))),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    const Color brandRed = Color(0xFFBA0007);
     const Color gradientTop = Color(0xFF5E0004);
     const Color gradientBottom = Color(0xFFBA0007);
 
@@ -270,7 +223,7 @@ class SheetGenerationPage extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'Select audio, video or paste a link.',
+                                          'Select an audio or video file.',
                                           style: TextStyle(
                                             fontFamily: 'Instrument Sans',
                                             fontSize: 12,
@@ -342,37 +295,6 @@ class SheetGenerationPage extends StatelessWidget {
                           description: 'Choose an audio or video file',
                           isSmallScreen: isSmallScreen,
                           onTap: () => _pickDeviceMedia(context),
-                        ),
-                        SizedBox(height: isSmallScreen ? 14 : 18),
-
-                        // Upload from cloud card
-                        _buildUploadCard(
-                          context: context,
-                          image: 'assets/cloud.png',
-                          title: 'Upload from cloud',
-                          description:
-                              'Google Drive, Dropbox, OneDrive and more',
-                          isSmallScreen: isSmallScreen,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const ChooseModePage(source: 'cloud'),
-                              ),
-                            );
-                          },
-                        ),
-                        SizedBox(height: isSmallScreen ? 14 : 18),
-
-                        // Paste link card
-                        _buildUploadCard(
-                          context: context,
-                          image: 'assets/phone.png',
-                          title: 'Paste link',
-                          description: 'YouTube, MIDI or MusicXML URL',
-                          isSmallScreen: isSmallScreen,
-                          onTap: () => _showUrlDialog(context),
                         ),
                         const SizedBox(height: 36),
 
