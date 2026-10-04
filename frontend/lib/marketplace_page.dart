@@ -555,13 +555,33 @@ class MarketplaceHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final fontSize = (constraints.maxWidth * .075).clamp(21.0, 36.0);
+      final smallest = MediaQuery.sizeOf(context).width < 360;
+      final fontSize = smallest
+          ? (constraints.maxWidth * .085).clamp(23.0, 28.0)
+          : (constraints.maxWidth * .075).clamp(21.0, 36.0);
+      var artworkRatio = .82;
+      if (smallest) {
+        final textWidth = (constraints.maxWidth - 8) * 11 / 23;
+        final imageWidth = (constraints.maxWidth - 8) * 12 / 23;
+        final heading = TextPainter(
+          text: TextSpan(text: 'Music,\nSheet and Lyric\nfor everyone',
+              style: TextStyle(fontFamily: _MarketplacePageState._font,
+                  fontSize: fontSize, height: 1.08, fontWeight: FontWeight.w800)),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: textWidth);
+        final height = heading.height + 32 > imageWidth / .62
+            ? heading.height + 32 : imageWidth / .62;
+        artworkRatio = imageWidth / height;
+        heading.dispose();
+      }
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
+              flex: smallest ? 11 : 1,
               child: Text(
                 'Music,\nSheet and Lyric\nfor everyone',
                 style: TextStyle(
@@ -575,8 +595,12 @@ class MarketplaceHero extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(
+              flex: smallest ? 12 : 1,
               child: AspectRatio(
-                aspectRatio: .82,
+                // Keep the artwork taller than the heading on narrow phones,
+                // including enlarged accessibility text. Center alignment
+                // puts the text below the artwork's top, not flush with it.
+                aspectRatio: artworkRatio,
                 child: ClipRect(
                   // The asset has a large transparent left margin. Crop that
                   // margin inside its own column, never over the banner text.

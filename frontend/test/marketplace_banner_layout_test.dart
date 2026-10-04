@@ -29,6 +29,12 @@ void main() {
         final text =
             tester.getRect(find.text('Music,\nSheet and Lyric\nfor everyone'));
         expect(image.center.dy, closeTo(text.center.dy, .1));
+        if (width < 360) {
+          expect(image.width, greaterThan(text.width));
+          expect(image.top, lessThan(text.top));
+          final heading = tester.widget<Text>(find.text('Music,\nSheet and Lyric\nfor everyone'));
+          expect(heading.style!.fontSize, greaterThanOrEqualTo(23));
+        }
         expect(text.right, lessThanOrEqualTo(image.left));
         expect(image.right, lessThanOrEqualTo(width));
         expect(text.right, lessThanOrEqualTo(width));
