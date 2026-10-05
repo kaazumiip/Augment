@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_palette.dart';
 import 'social_service.dart';
+import 'social_profile_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -17,7 +18,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    _service.markNotificationsRead();
   }
 
   @override
@@ -78,12 +78,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       children: [
                         if (today.isNotEmpty) ...[
                           const _SectionTitle(text: 'Today'),
-                          ...today.map((notice) => _Notice(notice: notice)),
+                          ...today.map((notice) => _Notice(
+                              notice: notice,
+                              onTap: () => _openNotice(notice))),
                         ],
                         if (earlier.isNotEmpty) ...[
                           const SizedBox(height: 14),
                           const _SectionTitle(text: 'Earlier'),
-                          ...earlier.map((notice) => _Notice(notice: notice)),
+                          ...earlier.map((notice) => _Notice(
+                              notice: notice,
+                              onTap: () => _openNotice(notice))),
                         ],
                       ],
                     );
@@ -101,6 +105,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return time.year == now.year &&
         time.month == now.month &&
         time.day == now.day;
+  }
+
+  Future<void> _openNotice(AppNotification notice) async {
+    try {
+      await _service.markNotificationRead(notice.id);
+      if (!mounted || notice.actorId == null) return;
+      await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => SocialProfilePage(
+                    name: notice.actorName,
+                    userId: notice.actorId!,
+                    isOwnProfile: false,
+                  )));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not open notification. Please try again.')));
+      }
+    }
   }
 }
 
@@ -120,17 +144,23 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.notice});
+  const _Notice({required this.notice, required this.onTap});
   final AppNotification notice;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) => InkWell(
+      onTap: onTap,
+      child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(children: [
           CircleAvatar(
             radius: 23,
             backgroundColor: AppPalette.surface(context),
-            child: Text(notice.actorName.substring(0, 1).toUpperCase(),
+            child: Text(
+                notice.actorName.isEmpty
+                    ? 'A'
+                    : notice.actorName.substring(0, 1).toUpperCase(),
                 style: const TextStyle(
                     color: NotificationsPage._red,
                     fontSize: 17,
@@ -152,15 +182,22 @@ class _Notice extends StatelessWidget {
               ),
             ),
           ),
+          if (!notice.read)
+            const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child:
+                    Icon(Icons.circle, size: 8, color: NotificationsPage._red)),
           Text(_ago(notice.createdAt),
               style: TextStyle(color: AppPalette.muted(context), fontSize: 10)),
         ]),
-      );
+      ));
 
   String _messageFor(String kind) => switch (kind) {
         'like' => 'liked your post.',
         'comment' => 'commented on your post.',
         'message' => 'sent you a message.',
+        'follow' => 'followed you.',
+        'follow_request' => 'requested to follow you.',
         'friend_request_accepted' => 'accepted your follow request.',
         'follow_request_accepted' => 'accepted your follow request.',
         _ => 'interacted with your account.',

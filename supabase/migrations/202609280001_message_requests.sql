@@ -1,5 +1,6 @@
 -- Direct messages no longer require a follow relationship.  A first-time
 -- conversation is a pending message request until its recipient accepts it.
+begin;
 
 alter table public.conversations
   add column if not exists request_status text not null default 'accepted'
@@ -101,7 +102,12 @@ select
   ) as last_message,
   last_message.created_at as last_message_at,
   mine.last_read_at,
-  last_message.sender_id as last_sender_id
+  last_message.sender_id as last_sender_id,
+  (select count(*)::integer from public.messages unread_message
+    where unread_message.conversation_id = mine.conversation_id
+      and unread_message.sender_id <> mine.user_id
+      and unread_message.created_at > coalesce(mine.last_read_at, '-infinity'::timestamptz)
+  ) as unread_count
 from public.conversation_members mine
 join public.conversations conversation on conversation.id = mine.conversation_id
 join public.conversation_members other_member
@@ -171,3 +177,4 @@ with check (
     )
   )
 );
+commit;

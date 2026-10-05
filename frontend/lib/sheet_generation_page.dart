@@ -14,27 +14,8 @@ class SheetGenerationPage extends StatelessWidget {
   Future<void> _pickDeviceMedia(BuildContext context) async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
+        type: FileType.audio,
         withData: true,
-        allowedExtensions: const [
-          'mp3',
-          'wav',
-          'm4a',
-          'aac',
-          'flac',
-          'ogg',
-          'opus',
-          'wma',
-          'aif',
-          'aiff',
-          'caf',
-          'mp4',
-          'mov',
-          'mkv',
-          'webm',
-          'avi',
-          '3gp',
-        ],
       );
       if (result == null || !context.mounted) return;
       final selectedFile = result.files.single;
@@ -223,7 +204,7 @@ class SheetGenerationPage extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'Select an audio or video file.',
+                                          'Select an audio file.',
                                           style: TextStyle(
                                             fontFamily: 'Instrument Sans',
                                             fontSize: 12,
@@ -292,7 +273,7 @@ class SheetGenerationPage extends StatelessWidget {
                           context: context,
                           image: 'assets/phone.png',
                           title: 'Upload from device',
-                          description: 'Choose an audio or video file',
+                          description: 'Choose an audio file',
                           isSmallScreen: isSmallScreen,
                           onTap: () => _pickDeviceMedia(context),
                         ),

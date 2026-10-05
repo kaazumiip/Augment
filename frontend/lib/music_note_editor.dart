@@ -37,14 +37,16 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
   int? _selectedMeasure;
   int _previewToken = 0;
   bool _editorOpen = false;
-  final bool _showGuide = false;
+  final bool _showGuide = true;
+  Timer? _redrawTimer;
   final _tourTargets = List.generate(4, (_) => GlobalKey());
   bool _tourOpen = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startTour(firstVisit: true));
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _startTour(firstVisit: true));
   }
 
   Future<void> _startTour({bool firstVisit = false}) async {
@@ -52,13 +54,17 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
     _tourOpen = true;
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (!mounted || (firstVisit && prefs.getBool('sheet_editor_tour_v1') == true)) return;
+      if (!mounted ||
+          (firstVisit && prefs.getBool('sheet_editor_tour_v2') == true)) {
+        return;
+      }
       await showSheetEditorWalkthrough(context, _tourTargets);
-      await prefs.setBool('sheet_editor_tour_v1', true);
+      await prefs.setBool('sheet_editor_tour_v2', true);
     } finally {
       _tourOpen = false;
     }
   }
+
   final List<_EditorSnapshot> _undoStack = [];
   final List<_EditorSnapshot> _redoStack = [];
 
@@ -98,15 +104,19 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
   }
 
   Future<void> _renderScore() async {
-    await _controller?.evaluateJavascript(
-      source: 'window.updateScore(${jsonEncode(_xml)});',
-    );
+    _redrawTimer?.cancel();
+    _redrawTimer = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) unawaited(_drawScoreNow());
+    });
+  }
+
+  Future<void> _drawScoreNow() async {
     final index = _selected;
-    if (index != null) {
-      await _controller?.evaluateJavascript(
-        source: 'window.selectScoreIndex($index);',
-      );
-    }
+    await _controller?.evaluateJavascript(
+      source: '(async function(){await window.updateScore(${jsonEncode(_xml)});'
+          '${index == null ? "" : "window.selectScoreIndex($index);"}'
+          '})()',
+    );
   }
 
   Future<void> _selectEvent(int index) async {
@@ -143,6 +153,7 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
   Future<void> _editSelected() async {
     final index = _selected;
     if (index == null || _editorOpen) return;
+    if (!_canEditTimingSlot(index)) return;
     _editorOpen = true;
     try {
       final result = await showModalBottomSheet<_ScoreNote>(
@@ -163,7 +174,6 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
         _xml = _ScoreNote.apply(widget.musicXml, _notes);
       });
       await _renderScore();
-      if (!result.isRest) unawaited(_previewEditedNote(result));
     } finally {
       _editorOpen = false;
     }
@@ -173,6 +183,7 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
       _ScoreNote Function(_ScoreNote note) update) async {
     final index = _selected;
     if (index == null) return;
+    if (!_canEditTimingSlot(index)) return;
     final updated = update(_notes[index]);
     if (identical(updated, _notes[index])) return;
     _undoStack.add(_snapshot);
@@ -182,7 +193,6 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
       _xml = _ScoreNote.apply(widget.musicXml, _notes);
     });
     await _renderScore();
-    if (!_notes[index].isRest) unawaited(_previewEditedNote(_notes[index]));
   }
 
   Future<void> _previewEditedNote(_ScoreNote note) async {
@@ -210,13 +220,23 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
               }),
             )
             .timeout(const Duration(seconds: 20));
-        if (token != _previewToken || response.statusCode != 200) continue;
+        if (!mounted || token != _previewToken) return;
+        if (response.statusCode != 200) continue;
         await _previewPlayer!.play(BytesSource(response.bodyBytes));
         return;
       } catch (_) {
         // A note edit stays valid even if the local renderer is offline.
       }
     }
+  }
+
+  bool _canEditTimingSlot(int index) {
+    if (_notes[index].tie == 'none') return true;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text(
+          'This note is connected to another note. Editing it is disabled to protect the sustained phrase.'),
+    ));
+    return false;
   }
 
   String _instrumentNameFromXml() {
@@ -233,6 +253,8 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
 
   @override
   void dispose() {
+    _redrawTimer?.cancel();
+    _previewToken++;
     _previewPlayer?.dispose();
     super.dispose();
   }
@@ -344,46 +366,69 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
         _selected == null ? -1 : activeEvents.indexOf(_selected!);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit notes'),
+        title: MediaQuery.sizeOf(context).width < 360
+            ? null
+            : const Text('Edit notes'),
         actions: [
-          IconButton(
-            tooltip: 'How to edit',
-            onPressed: _startTour,
-            icon: const Icon(Icons.help_outline_rounded),
-          ),
-          IconButton(
-            key: _tourTargets[2],
-            tooltip: 'Undo',
-            onPressed: _canUndo ? _undo : null,
-            icon: const Icon(Icons.undo_rounded),
-          ),
-          IconButton(
-            tooltip: 'Redo',
-            onPressed: _canRedo ? _redo : null,
-            icon: const Icon(Icons.redo_rounded),
-          ),
-          TextButton(
-            key: _tourTargets[3],
-            onPressed: () => Navigator.pop(context, EditedMusicSheet(_xml)),
-            child: const Text('Save & listen'),
-          ),
+          SizedBox(
+              width:
+                  (MediaQuery.sizeOf(context).width - 64).clamp(120.0, 280.0),
+              child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: 'How to edit',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 40),
+                      padding: EdgeInsets.zero,
+                      onPressed: _startTour,
+                      icon: const Icon(Icons.help_outline_rounded),
+                    ),
+                    IconButton(
+                      key: _tourTargets[2],
+                      tooltip: 'Undo',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 40),
+                      padding: EdgeInsets.zero,
+                      onPressed: _canUndo ? _undo : null,
+                      icon: const Icon(Icons.undo_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Redo',
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 40),
+                      padding: EdgeInsets.zero,
+                      onPressed: _canRedo ? _redo : null,
+                      icon: const Icon(Icons.redo_rounded),
+                    ),
+                    TextButton(
+                      key: _tourTargets[3],
+                      onPressed: () =>
+                          Navigator.pop(context, EditedMusicSheet(_xml)),
+                      child: const Text('Save changes'),
+                    ),
+                  ]))),
         ],
       ),
       body: Column(children: [
-        if (_showGuide) Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(children: [
-            Image.asset('assets/augment_bunny_mascot_wink.png',
-                width: 48, height: 64, fit: BoxFit.contain,
-                semanticLabel: 'Augment mascot explaining note editing'),
-            const SizedBox(width: 10),
-            const Expanded(child: Text(
-              'Let’s edit! Tap a note, then use Up or Down to change its sound. '
-              'Change its length if needed. Undo reverses a mistake. '
-              'Save & listen updates your sheet and playback.',
-              style: TextStyle(fontSize: 12, height: 1.4))),
-          ]),
-        ),
+        if (_showGuide)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(children: [
+              Image.asset('assets/augment_bunny_mascot_wink.png',
+                  width: 48,
+                  height: 64,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Augment mascot explaining note editing'),
+              const SizedBox(width: 10),
+              const Expanded(
+                  child: Text(
+                      'Tap a note, then choose Lower or Higher. '
+                      'Your rhythm stays the same. Hear note previews your change. '
+                      'Save changes updates your sheet and playback.',
+                      style: TextStyle(fontSize: 12, height: 1.4))),
+            ]),
+          ),
         _StudioPalette(
           key: _tourTargets[1],
           enabled: selected != null,
@@ -396,7 +441,9 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
           onDot: _toggleDot,
           onWriteNote: () => _setRestState(false),
           onWriteRest: () => _setRestState(true),
-          onMore: _editSelected,
+          onMore: selected == null || selected.isRest
+              ? () {}
+              : () => _previewEditedNote(selected),
         ),
         _MeasureStrip(
           measures: _measures,
@@ -491,7 +538,7 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
               FilledButton.tonalIcon(
                 onPressed: selected == null ? null : _editSelected,
                 icon: const Icon(Icons.tune_rounded, size: 18),
-                label: const Text('Edit'),
+                label: const Text('Pitch'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 11),
                 ),
@@ -513,13 +560,13 @@ html,body{margin:0;background:#fffaf8}#score{min-height:100vh;padding:2px}#loadi
 var scoreXml=$xml,eventTimes=$eventTimes,osmd,positions=[],score=document.getElementById('score');
 function script(){return new Promise(function(ok,bad){var s=document.createElement('script');s.src=$scriptUrl;s.onload=ok;s.onerror=function(){var f=document.createElement('script');f.src='https://unpkg.com/opensheetmusicdisplay@1.9.9/build/opensheetmusicdisplay.min.js';f.onload=ok;f.onerror=bad;document.head.appendChild(f)};document.head.appendChild(s)})}
 function cursor(){return document.querySelector('#osmdCursor')||document.querySelector('.osmd-cursor')||document.querySelector('[id*=cursor i]')}
-async function render(xml){document.getElementById('loading').style.display='block';score.innerHTML='';if(!window.opensheetmusicdisplay)await script();osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(score,{autoResize:true,backend:'svg',drawTitle:true,drawComposer:false,drawCredits:false,pageFormat:'A4_P'});await osmd.load(xml);osmd.zoom=window.innerWidth<=430?.46:.54;osmd.render();document.getElementById('loading').style.display='none';mapNotes()}
+async function render(xml){document.getElementById('loading').style.display='block';if(!window.opensheetmusicdisplay)await script();if(!osmd)osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay(score,{autoResize:true,backend:'svg',drawTitle:true,drawComposer:false,drawCredits:false,pageFormat:'A4_P'});await osmd.load(xml);osmd.zoom=window.innerWidth<=430?.46:.54;osmd.render();document.getElementById('loading').style.display='none';mapNotes()}
 function timeOrder(a,b){var x=a.split(':').map(Number),y=b.split(':').map(Number);return x[0]-y[0]||x[1]-y[1]}
 function mapNotes(){positions=[];if(!osmd||!osmd.cursor)return;var groups=Array.from(new Set(eventTimes)).sort(timeOrder),points=[];osmd.cursor.reset();osmd.cursor.show();for(var i=0;i<groups.length;i++){var c=cursor();if(c){var r=c.getBoundingClientRect();points.push({step:i,x:r.left+r.width/2,y:r.top+r.height/2})}try{osmd.cursor.next()}catch(e){break}}for(var j=0;j<eventTimes.length;j++){var position=points[groups.indexOf(eventTimes[j])];if(position)positions.push({index:j,step:position.step,x:position.x,y:position.y})}osmd.cursor.hide()}
-function select(point){osmd.cursor.reset();osmd.cursor.show();for(var i=0;i<point.step;i++){try{osmd.cursor.next()}catch(e){break}}var c=cursor(),glow=document.getElementById('noteGlow');if(!glow){glow=document.createElement('div');glow.id='noteGlow';document.body.appendChild(glow)}if(c){c.style.setProperty('stroke','#ba0007','important');c.style.setProperty('stroke-width','3px','important');c.style.setProperty('fill','#ba0007','important');c.style.setProperty('fill-opacity','.12','important');var r=c.getBoundingClientRect();glow.style.left=(r.left+r.width/2)+'px';glow.style.top=(r.top+2)+'px';glow.style.height=Math.max(26,r.height-4)+'px';glow.style.display='block';c.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}}
+function select(point){osmd.cursor.reset();osmd.cursor.show();for(var i=0;i<point.step;i++){try{osmd.cursor.next()}catch(e){break}}var c=cursor(),glow=document.getElementById('noteGlow');if(!glow){glow=document.createElement('div');glow.id='noteGlow';document.body.appendChild(glow)}if(c){c.style.setProperty('stroke','#ba0007','important');c.style.setProperty('stroke-width','3px','important');c.style.setProperty('fill','#ba0007','important');c.style.setProperty('fill-opacity','.12','important');var r=c.getBoundingClientRect();glow.style.left=(r.left+r.width/2)+'px';glow.style.top=(r.top+2)+'px';glow.style.height=Math.max(26,r.height-4)+'px';glow.style.display='block';if(r.bottom<0||r.top>window.innerHeight)c.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'})}}
 score.addEventListener('pointerup',function(e){if(!positions.length)return;var best=positions[0],distance=Infinity;positions.forEach(function(p){var d=Math.abs(p.x-e.clientX)+Math.abs(p.y-e.clientY)*2;if(d<distance){best=p;distance=d}});if(distance>90)return;select(best);window.flutter_inappwebview.callHandler('selectScoreNote',best.index)});
 window.selectScoreIndex=function(index){var point=positions.find(function(p){return p.index===index});if(point)select(point)};
-window.updateScore=async function(xml){scoreXml=xml;await render(xml)};render(scoreXml);
+window.updateScore=async function(xml){var x=window.scrollX,y=window.scrollY;scoreXml=xml;await render(xml);window.scrollTo(x,y)};render(scoreXml);
 </script></body></html>''';
   }
 }
@@ -568,110 +615,29 @@ class _StudioPalette extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           children: [
             _PaletteAction(
-              icon: Icons.arrow_downward_rounded,
-              label: 'Down',
-              enabled: enabled,
-              onTap: onTransposeDown,
-            ),
+                icon: Icons.arrow_downward_rounded,
+                label: 'Lower',
+                enabled: enabled && !isRest,
+                onTap: onTransposeDown),
             _PaletteAction(
-              icon: Icons.arrow_upward_rounded,
-              label: 'Up',
-              enabled: enabled,
-              onTap: onTransposeUp,
-            ),
+                icon: Icons.arrow_upward_rounded,
+                label: 'Higher',
+                enabled: enabled && !isRest,
+                onTap: onTransposeUp),
             _PaletteAction(
-              icon: Icons.edit_note_rounded,
-              label: 'Write note',
-              enabled: enabled,
-              selected: enabled && !isRest,
-              onTap: onWriteNote,
-            ),
+                icon: isRest ? Icons.music_note_rounded : Icons.pause_rounded,
+                label: isRest ? 'Restore note' : 'Make silent',
+                enabled: enabled,
+                onTap: isRest ? onWriteNote : onWriteRest),
             _PaletteAction(
-              icon: Icons.pause_circle_outline_rounded,
-              label: 'Rest',
-              enabled: enabled,
-              selected: enabled && isRest,
-              onTap: onWriteRest,
-            ),
-            _PaletteTextAction(
-              text: '𝅝',
-              label: 'Whole',
-              enabled: enabled,
-              selected: selectedDuration == 'whole',
-              onTap: () => onDuration('whole'),
-            ),
-            _PaletteTextAction(
-              text: '𝅗𝅥',
-              label: 'Half',
-              enabled: enabled,
-              selected: selectedDuration == 'half',
-              onTap: () => onDuration('half'),
-            ),
-            _PaletteAction(
-              icon: Icons.music_note_rounded,
-              label: 'Quarter',
-              enabled: enabled,
-              selected: selectedDuration == 'quarter',
-              onTap: () => onDuration('quarter'),
-            ),
-            _PaletteAction(
-              icon: Icons.music_note_outlined,
-              label: 'Eighth',
-              enabled: enabled,
-              selected: selectedDuration == 'eighth',
-              onTap: () => onDuration('eighth'),
-            ),
-            _PaletteTextAction(
-              text: '𝅘𝅥𝅯',
-              label: '16th',
-              enabled: enabled,
-              selected: selectedDuration == '16th',
-              onTap: () => onDuration('16th'),
-            ),
-            _PaletteTextAction(
-              text: '𝅘𝅥𝅰',
-              label: '32nd',
-              enabled: enabled,
-              selected: selectedDuration == '32nd',
-              onTap: () => onDuration('32nd'),
-            ),
-            _PaletteTextAction(
-              text: '♭',
-              label: 'Flat',
-              enabled: enabled,
-              onTap: () => onAccidental(-1),
-            ),
-            _PaletteTextAction(
-              text: '♮',
-              label: 'Natural',
-              enabled: enabled,
-              onTap: () => onAccidental(0),
-            ),
-            _PaletteTextAction(
-              text: '♯',
-              label: 'Sharp',
-              enabled: enabled,
-              onTap: () => onAccidental(1),
-            ),
-            _PaletteAction(
-              icon: Icons.circle_outlined,
-              label: 'Dot',
-              enabled: enabled,
-              onTap: onDot,
-            ),
-            _PaletteAction(
-              icon: Icons.tune_rounded,
-              label: 'More',
-              enabled: enabled,
-              onTap: onMore,
-            ),
+                icon: Icons.volume_up_rounded,
+                label: 'Hear note',
+                enabled: enabled && !isRest,
+                onTap: onMore),
             Padding(
-              padding: const EdgeInsets.only(left: 8, top: 17),
-              child: Text(
-                enabled ? 'Writing tools' : 'Select a note',
-                style: TextStyle(color: muted, fontSize: 11),
-              ),
-            ),
+                padding: const EdgeInsets.only(left: 8, top: 17),
+                child: Text(enabled ? 'Timing unchanged' : 'Tap a note first',
+                    style: TextStyle(color: muted, fontSize: 11))),
           ],
         ),
       ),
@@ -794,13 +760,11 @@ class _PaletteAction extends StatelessWidget {
     required this.label,
     required this.enabled,
     required this.onTap,
-    this.selected = false,
   });
   final IconData icon;
   final String label;
   final bool enabled;
   final VoidCallback onTap;
-  final bool selected;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -812,72 +776,19 @@ class _PaletteAction extends StatelessWidget {
             opacity: enabled ? 1 : .38,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFFFFDDD9) : Colors.transparent,
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon,
-                        color: selected ? const Color(0xFFBA0007) : null),
+                    Icon(icon, color: null),
                     const SizedBox(height: 2),
                     Text(label,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 10,
-                          color: selected ? const Color(0xFF8E0006) : null,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.normal,
-                        )),
-                  ]),
-            ),
-          ),
-        ),
-      );
-}
-
-class _PaletteTextAction extends StatelessWidget {
-  const _PaletteTextAction({
-    required this.text,
-    required this.label,
-    required this.enabled,
-    required this.onTap,
-    this.selected = false,
-  });
-  final String text;
-  final String label;
-  final bool enabled;
-  final VoidCallback onTap;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 52,
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(10),
-          child: Opacity(
-            opacity: enabled ? 1 : .38,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: selected ? const Color(0xFFFFDDD9) : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(text,
-                        style: TextStyle(
-                          fontSize: 23,
-                          height: 1,
-                          color: selected ? const Color(0xFFBA0007) : null,
-                        )),
-                    const SizedBox(height: 3),
-                    Text(label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: selected ? const Color(0xFF8E0006) : null,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.normal,
+                          color: null,
+                          fontWeight: FontWeight.normal,
                         )),
                   ]),
             ),
@@ -895,13 +806,11 @@ class _NoteTools extends StatefulWidget {
 }
 
 class _NoteToolsState extends State<_NoteTools> {
-  late String _step = widget.note.step,
-      _type = widget.note.type,
-      _tie = widget.note.tie;
-  late int _alter = widget.note.alter,
-      _octave = widget.note.octave,
-      _duration = widget.note.duration;
-  late bool _dotted = widget.note.dotted;
+  late String _step = widget.note.step;
+  late final String _type = widget.note.type, _tie = widget.note.tie;
+  late int _alter = widget.note.alter, _octave = widget.note.octave;
+  late final int _duration = widget.note.duration;
+  late final bool _dotted = widget.note.dotted;
   late bool _isRest = widget.note.isRest;
 
   void _audition() {
@@ -950,7 +859,6 @@ class _NoteToolsState extends State<_NoteTools> {
       _step = spelling.$1;
       _alter = spelling.$2;
     });
-    _audition();
   }
 
   @override
@@ -972,7 +880,6 @@ class _NoteToolsState extends State<_NoteTools> {
               child: OutlinedButton.icon(
                 onPressed: () {
                   setState(() => _isRest = false);
-                  _audition();
                 },
                 icon: const Icon(Icons.edit_note_rounded),
                 label: const Text('Write a note in this rest slot'),
@@ -982,19 +889,16 @@ class _NoteToolsState extends State<_NoteTools> {
             Row(children: [
               _drop('Pitch', _step, 'CDEFGAB'.split(''), (v) {
                 setState(() => _step = v!);
-                _audition();
               }),
               const SizedBox(width: 10),
               _drop('Accidental', _alter, const [-2, -1, 0, 1, 2], (v) {
                 setState(() => _alter = v!);
-                _audition();
               },
                   label: (v) =>
                       const {-2: '𝄫', -1: '♭', 0: '♮', 1: '♯', 2: '𝄪'}[v]!),
               const SizedBox(width: 10),
               _drop('Octave', _octave, List.generate(9, (i) => i), (v) {
                 setState(() => _octave = v!);
-                _audition();
               })
             ]),
             const SizedBox(height: 12),
@@ -1017,45 +921,11 @@ class _NoteToolsState extends State<_NoteTools> {
             ]),
           ],
           const SizedBox(height: 12),
-          Row(children: [
-            _drop('Length', _type, const [
-              'whole',
-              'half',
-              'quarter',
-              'eighth',
-              '16th',
-              '32nd'
-            ], (v) {
-              setState(() => _type = v!);
-              _audition();
-            }),
-            const SizedBox(width: 10),
-            Expanded(
-                child: TextFormField(
-                    initialValue: '$_duration',
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Duration'),
-                    onChanged: (v) => _duration = int.tryParse(v) ?? _duration))
-          ]),
-          const SizedBox(height: 6),
-          Text(
-            'Pitch and rest edits preserve this event’s rhythm slot. Changing length changes the written rhythm in this measure.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          Row(children: [
-            Expanded(
-                child: SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Dotted'),
-                    value: _dotted,
-                    onChanged: (v) => setState(() => _dotted = v))),
-            const SizedBox(width: 10),
-            _drop('Tie', _tie, const ['none', 'start', 'stop'],
-                (v) => setState(() => _tie = v!),
-                label: (v) => v == 'none'
-                    ? 'No tie'
-                    : '${v[0].toUpperCase()}${v.substring(1)} tie')
-          ]),
+          const Text('Pitch changes keep the original note length and rhythm.'),
+          TextButton.icon(
+              onPressed: _isRest ? null : _audition,
+              icon: const Icon(Icons.volume_up_rounded),
+              label: const Text('Hear note')),
           const SizedBox(height: 12),
           SizedBox(
               width: double.infinity,

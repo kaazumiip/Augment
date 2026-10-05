@@ -812,7 +812,7 @@ class _UnreadMessageAction extends StatelessWidget {
         stream: SocialService.instance.conversations(),
         builder: (context, snapshot) {
           final unread = (snapshot.data ?? const <ConversationSummary>[])
-              .where((conversation) => conversation.unread)
+              .where((conversation) => conversation.unread && !conversation.isMuted)
               .length;
           return Stack(clipBehavior: Clip.none, children: [
             _CircleAction(

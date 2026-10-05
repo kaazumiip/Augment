@@ -371,9 +371,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   Future<void> _chooseMedia(String type) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
+      type: type == 'image' ? FileType.image : FileType.custom,
       allowedExtensions: type == 'image'
-          ? const ['jpg', 'jpeg', 'png', 'webp']
+          ? null
           : type == 'video'
               ? const ['mp4', 'mov', 'webm']
               : type == 'sheet'

@@ -214,6 +214,9 @@ class ConversationSummary {
     required this.updatedAt,
     required this.unread,
     this.unreadCount = 0,
+    this.isPinned = false,
+    this.isMuted = false,
+    this.isGroup = false,
     this.lastSenderId,
     this.avatarUrl,
   });
@@ -224,6 +227,9 @@ class ConversationSummary {
   final DateTime? updatedAt;
   final bool unread;
   final int unreadCount;
+  final bool isPinned;
+  final bool isMuted;
+  final bool isGroup;
   final String? lastSenderId;
   final String? avatarUrl;
   factory ConversationSummary.fromMap(Map<String, dynamic> data,
@@ -242,8 +248,12 @@ class ConversationSummary {
       lastSenderId: lastSenderId,
       updatedAt: lastTime,
       unreadCount: unreadCount,
-      unread: unreadCount > 0 ||
-          (lastSenderId != null &&
+      isPinned: data['is_pinned'] == true,
+      isMuted: data['is_muted'] == true,
+      isGroup: data['is_group'] == true,
+      unread: data.containsKey('unread_count')
+          ? unreadCount > 0
+          : (lastSenderId != null &&
               lastSenderId != currentUserId &&
               lastTime != null &&
               (readTime == null || lastTime.isAfter(readTime))),
@@ -259,6 +269,9 @@ class ConversationSummary {
         updatedAt: updatedAt,
         unread: unread,
         unreadCount: unreadCount,
+        isPinned: isPinned,
+        isMuted: isMuted,
+        isGroup: isGroup,
         lastSenderId: lastSenderId,
         avatarUrl: avatarUrl ?? this.avatarUrl,
       );
@@ -298,6 +311,7 @@ class AppNotification {
     required this.kind,
     required this.createdAt,
     required this.read,
+    this.actorId,
   });
 
   final String id;
@@ -305,6 +319,7 @@ class AppNotification {
   final String kind;
   final DateTime createdAt;
   final bool read;
+  final String? actorId;
 }
 
 class FriendRequest {
@@ -770,11 +785,18 @@ class SocialService {
   }
 
   Future<List<ChatMessage>> _loadMessages(String conversationId) async {
+    final membership = await _db
+        .from('conversation_members')
+        .select('cleared_at')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', _uid)
+        .single();
     final rows = await _db
         .from('messages')
         .select(
             'id,sender_id,body,created_at,media_url,media_type,file_name,waveform')
         .eq('conversation_id', conversationId)
+        .gt('created_at', membership['cleared_at'] ?? '1970-01-01T00:00:00Z')
         .order('created_at', ascending: true);
     return (rows as List)
         .cast<Map<String, dynamic>>()
@@ -908,13 +930,62 @@ class SocialService {
     }
   }
 
-  Future<void> markConversationRead(String conversationId) async {
+  Future<void> markConversationRead(String conversationId,
+      {DateTime? through}) async {
+    await _db.rpc('mark_conversation_read', params: {
+      'target_id': conversationId,
+      'read_through': (through ?? DateTime.now()).toUtc().toIso8601String(),
+    });
+    _localConversationChanges.add(null);
+  }
+
+  Future<void> setConversationSetting(
+      String id, String setting, bool value) async {
+    if (!const ['is_pinned', 'is_muted'].contains(setting)) {
+      throw ArgumentError('Unknown setting');
+    }
     await _db
         .from('conversation_members')
-        .update({'last_read_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('conversation_id', conversationId)
-        .eq('user_id', _uid);
+        .update({setting: value})
+        .eq('conversation_id', id)
+        .eq('user_id', _uid)
+        .select('conversation_id')
+        .single();
     _localConversationChanges.add(null);
+  }
+
+  Future<void> deleteConversationForMe(String id) async {
+    await _db.rpc('clear_conversation_for_me', params: {'target_id': id});
+    _localConversationChanges.add(null);
+  }
+
+  Future<String> createGroup(String name, List<String> ids) async {
+    final id = await _db.rpc('create_group_conversation', params: {
+      'group_title': name,
+      'member_ids': ids,
+    });
+    _localConversationChanges.add(null);
+    return id.toString();
+  }
+
+  Future<List<SocialProfileSummary>> groupContacts() async {
+    final rows = await _db
+        .from('friend_requests')
+        .select('sender_id,receiver_id')
+        .eq('status', 'accepted')
+        .or('sender_id.eq.$_uid,receiver_id.eq.$_uid');
+    final ids = <String>{
+      for (final row in rows)
+        row['sender_id'] == _uid
+            ? row['receiver_id'] as String
+            : row['sender_id'] as String
+    };
+    if (ids.isEmpty) return [];
+    final profiles = await _db
+        .from('profiles')
+        .select('id,display_name,avatar_url')
+        .inFilter('id', ids.toList());
+    return profiles.map((row) => SocialProfileSummary.fromMap(row)).toList();
   }
 
   Future<List<ConversationSummary>> loadConversations() async {
@@ -929,7 +1000,14 @@ class SocialService {
               currentUserId: _uid,
             ))
         .toList();
-    final userIds = conversations.map((item) => item.otherUserId).toSet();
+    conversations.sort((a, b) => a.isPinned != b.isPinned
+        ? (a.isPinned ? -1 : 1)
+        : (b.updatedAt ?? DateTime(1970))
+            .compareTo(a.updatedAt ?? DateTime(1970)));
+    final userIds = conversations
+        .where((item) => !item.isGroup)
+        .map((item) => item.otherUserId)
+        .toSet();
     if (userIds.isEmpty) return conversations;
     final profiles = (await _db
             .from('profiles')
@@ -1409,6 +1487,7 @@ class SocialService {
               kind: row['kind'] as String? ?? 'activity',
               createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
               read: row['read_at'] != null,
+              actorId: row['actor_id'] as String?,
             ))
         .toList();
   }
@@ -1418,6 +1497,12 @@ class SocialService {
       .update({'read_at': DateTime.now().toUtc().toIso8601String()})
       .eq('recipient_id', _uid)
       .isFilter('read_at', null);
+
+  Future<void> markNotificationRead(String id) => _db
+      .from('notifications')
+      .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+      .eq('recipient_id', _uid)
+      .eq('id', id);
 
   Future<String> startDirectConversation(String otherUserId) async {
     final currentUserId = _uid;
@@ -1442,8 +1527,16 @@ class SocialService {
             .eq('user_id', otherUserId)
             .limit(1);
         if ((shared as List).isNotEmpty) {
-          final foundId = (shared as List).first['conversation_id'] as String;
-          return foundId;
+          final ids = (shared as List)
+              .map((row) => row['conversation_id'] as String)
+              .toList();
+          final direct = await _db
+              .from('conversations')
+              .select('id')
+              .inFilter('id', ids)
+              .eq('is_group', false)
+              .limit(1);
+          if (direct.isNotEmpty) return direct.first['id'] as String;
         }
       }
     } catch (_) {

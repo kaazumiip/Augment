@@ -86,6 +86,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   String _sheetImageFile = '';
 
   String _musicXmlContent = '';
+  String? _pendingEditedXml;
+  bool _savingEditedSheet = false;
   String? _scoreRendererUrl;
   String? _scoreRendererError;
   bool _isLoadingMusicXml = false;
@@ -343,17 +345,19 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   }
 
   Future<void> _editNotes() async {
+    if (_savingEditedSheet) return;
     if (_musicXmlContent.isEmpty) {
       _showPlaybackError(
           'Wait for the sheet to finish loading before editing notes.');
       return;
     }
+    final editorScript = await SheetScoreRenderer.loadScriptUrl();
+    if (!mounted) return;
     final edited =
         await Navigator.of(context).push<EditedMusicSheet>(MaterialPageRoute(
       builder: (_) => MusicNoteEditorPage(
-        musicXml: _musicXmlContent,
-        osmdScriptUrl:
-            '$_sheetServerUrl/assets/web/js/opensheetmusicdisplay.min.js',
+        musicXml: _pendingEditedXml ?? _musicXmlContent,
+        osmdScriptUrl: editorScript,
         apiBaseUrls: _baseUrls,
       ),
     ));
@@ -364,14 +368,22 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       content: Text('Preparing your edited sheet and playback…'),
       duration: Duration(seconds: 2),
     ));
-    final rendered = await _renderEditedScore(edited.musicXml);
+    _pendingEditedXml = edited.musicXml;
+    _savingEditedSheet = true;
+    Map<String, dynamic>? rendered;
+    try {
+      rendered = await _renderEditedScore(edited.musicXml);
+    } finally {
+      _savingEditedSheet = false;
+    }
     if (!mounted) return;
     if (rendered == null || rendered['audio_available'] != true) {
       _showPlaybackError(
-          'Playback could not be updated. Your previous saved sheet is unchanged. Please try again.');
+          'Playback could not be updated. Your saved sheet is unchanged. Reopen Edit notes to retry your draft.');
       return;
     }
     await _audioPlayer?.stop();
+    _pendingEditedXml = null;
     if (!mounted) return;
     setState(() {
       _musicXmlContent = edited.musicXml;
@@ -381,7 +393,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
         ..remove('pdf_url')
         ..remove('sheet_image_url')
         ..remove('cached_music_xml_path')
-        ..addAll(rendered)
+        ..addAll(rendered!)
         ..['musicxml_content'] = edited.musicXml
         ..['source_base_url'] = _sheetServerUrl
         ..remove('cached_audio_path');

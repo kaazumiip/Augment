@@ -94,11 +94,18 @@ class _MessagesPageState extends State<MessagesPage> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               AppBackButton(onPressed: () => Navigator.pop(context)),
               const SizedBox(height: 25),
-              Text('Message .',
-                  style: TextStyle(
-                      color: AppPalette.text(context),
-                      fontSize: 25,
-                      fontWeight: FontWeight.w800)),
+              Row(children: [
+                Expanded(
+                    child: Text('Message .',
+                        style: TextStyle(
+                            color: AppPalette.text(context),
+                            fontSize: 25,
+                            fontWeight: FontWeight.w800))),
+                TextButton.icon(
+                    onPressed: _createGroup,
+                    icon: const Icon(Icons.group_add_outlined),
+                    label: const Text('Create group')),
+              ]),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.center,
@@ -182,6 +189,7 @@ class _MessagesPageState extends State<MessagesPage> {
                               ...rows.map(
                                 (item) => _Conversation(
                                   item: item,
+                                  onLongPress: () => _conversationMenu(item),
                                   onTap: () async {
                                     await Navigator.push(
                                       context,
@@ -234,6 +242,147 @@ class _MessagesPageState extends State<MessagesPage> {
       }
     }
   }
+
+  Future<void> _conversationMenu(ConversationSummary item) async {
+    final action = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: AppPalette.surface(context),
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (ctx) => SafeArea(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(
+                  title: Text(item.name,
+                      style: const TextStyle(fontWeight: FontWeight.w800))),
+              ListTile(
+                  leading: const Icon(Icons.push_pin_outlined),
+                  title: Text(item.isPinned ? 'Unpin' : 'Pin'),
+                  onTap: () => Navigator.pop(ctx, 'pin')),
+              ListTile(
+                  leading: const Icon(Icons.notifications_off_outlined),
+                  title: Text(item.isMuted ? 'Unmute' : 'Mute'),
+                  onTap: () => Navigator.pop(ctx, 'mute')),
+              ListTile(
+                  leading: const Icon(Icons.delete_outline,
+                      color: MessagesPage._red),
+                  title: const Text('Delete',
+                      style: TextStyle(color: MessagesPage._red)),
+                  onTap: () => Navigator.pop(ctx, 'delete')),
+            ])));
+    if (!mounted || action == null) return;
+    try {
+      if (action == 'delete') {
+        final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                    title: const Text('Delete this conversation?'),
+                    content: const Text(
+                        'This clears the conversation for you only. Other people keep their messages. New messages will appear again.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete'))
+                    ]));
+        if (confirmed != true) return;
+        await _service.deleteConversationForMe(item.id);
+      } else {
+        await _service.setConversationSetting(
+            item.id,
+            action == 'pin' ? 'is_pinned' : 'is_muted',
+            action == 'pin' ? !item.isPinned : !item.isMuted);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not update chat: $error')));
+      }
+    }
+  }
+
+  Future<void> _createGroup() async {
+    final name = TextEditingController();
+    final selected = <String>{};
+    try {
+      final contacts = await _service.groupContacts();
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+              builder: (ctx, change) => AlertDialog(
+                title: const Text('Create group'),
+                scrollable: true,
+                      content: SizedBox(
+                          width: double.maxFinite,
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            TextField(
+                                controller: name,
+                                maxLength: 80,
+                                onChanged: (_) => change(() {}),
+                                decoration: const InputDecoration(
+                                    labelText: 'Group name')),
+                            const Text('Choose 2 to 19 connected musicians.'),
+                            SizedBox(
+                                height: 220,
+                                child: contacts.isEmpty
+                                    ? const Center(
+                                        child: Text(
+                                            'Connect with musicians first.'))
+                                    : ListView(
+                                        children: contacts
+                                            .map((p) => CheckboxListTile(
+                                                title: Text(p.name),
+                                                value: selected.contains(p.id),
+                                                onChanged: (value) =>
+                                                    change(() {
+                                                      if (value == true &&
+                                                          selected.length <
+                                                              19) {
+                                                        selected.add(p.id);
+                                                      } else {
+                                                        selected.remove(p.id);
+                                                      }
+                                                    })))
+                                            .toList())),
+                          ])),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel')),
+                        FilledButton(
+                            onPressed:
+                                selected.length < 2 || name.text.trim().isEmpty
+                                    ? null
+                                    : () => Navigator.pop(ctx, true),
+                            child: const Text('Create'))
+                      ])));
+      if (confirmed != true) return;
+      final id = await _service.createGroup(name.text, selected.toList());
+      if (!mounted) return;
+      await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ChatPage(
+                  conversation: ConversationSummary(
+                      id: id,
+                      otherUserId: '',
+                      name: name.text.trim(),
+                      lastMessage: '',
+                      updatedAt: null,
+                      unread: false,
+                      isGroup: true))));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not create group: $error')));
+      }
+    } finally {
+      name.dispose();
+    }
+  }
 }
 
 class ChatPage extends StatefulWidget {
@@ -263,15 +412,18 @@ class _ChatPageState extends State<ChatPage> {
   late final Stream<UserPresence> _presenceStream;
   String? _lastMarkedIncomingMessageId;
 
-  Future<void> _markConversationRead() async {
+  Future<void> _markConversationRead({DateTime? through}) async {
     try {
-      await _service.markConversationRead(widget.conversation.id);
+      await _service.markConversationRead(widget.conversation.id,
+          through: through);
     } catch (_) {
       // Reading the conversation must never make the chat unusable.
+      _lastMarkedIncomingMessageId = null;
     }
   }
 
   void _openOtherProfile() {
+    if (widget.conversation.isGroup) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -288,8 +440,9 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _messagesStream = _service.messages(widget.conversation.id);
-    _presenceStream = _service.presence(widget.conversation.otherUserId);
-    unawaited(_markConversationRead());
+    _presenceStream = widget.conversation.isGroup
+        ? Stream.value(const UserPresence(null))
+        : _service.presence(widget.conversation.otherUserId);
   }
 
   @override
@@ -460,6 +613,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _markVisibleMessagesRead(List<ChatMessage> messages) {
+    if (!(ModalRoute.of(context)?.isCurrent ?? false)) return;
     final ownId = FirebaseAuth.instance.currentUser?.uid;
     ChatMessage? latestIncoming;
     for (final message in messages.reversed) {
@@ -474,8 +628,8 @@ class _ChatPageState extends State<ChatPage> {
     }
     _lastMarkedIncomingMessageId = latestIncoming.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_markConversationRead());
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
+        unawaited(_markConversationRead(through: latestIncoming!.createdAt));
       }
     });
   }
@@ -590,7 +744,9 @@ class _ChatPageState extends State<ChatPage> {
                               StreamBuilder<UserPresence>(
                                 stream: _presenceStream,
                                 builder: (context, snapshot) => Text(
-                                  _presenceLabel(snapshot.data),
+                                  widget.conversation.isGroup
+                                      ? 'Group conversation'
+                                      : _presenceLabel(snapshot.data),
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: snapshot.data?.isOnline == true
@@ -930,12 +1086,15 @@ class _Conversation extends StatelessWidget {
   const _Conversation({
     required this.item,
     required this.onTap,
+    required this.onLongPress,
   });
   final ConversationSummary item;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -972,6 +1131,10 @@ class _Conversation extends StatelessWidget {
               ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              if (item.isPinned)
+                const Icon(Icons.push_pin, size: 15, color: MessagesPage._red),
+              if (item.isMuted)
+                const Icon(Icons.notifications_off_outlined, size: 15),
               Text(item.updatedAt == null ? '' : _ago(item.updatedAt!),
                   style:
                       const TextStyle(fontSize: 10, color: Color(0xFFAAAAAA))),
