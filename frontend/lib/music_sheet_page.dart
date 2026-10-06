@@ -757,6 +757,15 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     }
   }
 
+  Future<void> _skipSeconds(double deltaSeconds) async {
+    if (!_audioAvailable || _audioDuration <= 0) return;
+    final currentSeconds = _playController.value * _audioDuration;
+    final targetSeconds =
+        (currentSeconds + deltaSeconds).clamp(0.0, _audioDuration);
+    final targetFraction = targetSeconds / _audioDuration;
+    await _seekToFraction(targetFraction, resume: _isPlaying);
+  }
+
   Future<void> _startScrub() async {
     _isScrubbing = true;
     _resumeAfterScrub = _isPlaying;
@@ -1450,13 +1459,15 @@ class _MusicSheetPageState extends State<MusicSheetPage>
                   size: isSmallScreen ? 20 : 22,
                 ),
               ),
-              IconButton(
-                tooltip: 'Restart',
-                onPressed: _audioAvailable
-                    ? () => _seekToFraction(0, resume: _isPlaying)
-                    : null,
-                icon: Icon(Icons.skip_previous,
-                    color: Colors.white, size: isSmallScreen ? 22 : 26),
+              GestureDetector(
+                onTap: _audioAvailable ? () => _skipSeconds(-10) : null,
+                child: Icon(
+                  Icons.replay_10,
+                  color: _audioAvailable
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.4),
+                  size: isSmallScreen ? 22 : 25,
+                ),
               ),
               GestureDetector(
                 onTap: _loadingAudio ? null : _togglePlay,
@@ -1480,8 +1491,16 @@ class _MusicSheetPageState extends State<MusicSheetPage>
                         ),
                 ),
               ),
-              Icon(Icons.music_note,
-                  color: Colors.white, size: isSmallScreen ? 20 : 22),
+              GestureDetector(
+                onTap: _audioAvailable ? () => _skipSeconds(10) : null,
+                child: Icon(
+                  Icons.forward_10,
+                  color: _audioAvailable
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.4),
+                  size: isSmallScreen ? 22 : 25,
+                ),
+              ),
               GestureDetector(
                 onTap: _toggleFullscreen,
                 child: Icon(
