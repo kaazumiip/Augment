@@ -108,6 +108,16 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
         Future.value());
   }
 
+  void _deselect() {
+    if (_selected == null) return;
+    setState(() {
+      _selected = null;
+    });
+    unawaited(_controller?.evaluateJavascript(
+            source: 'window.selectScoreIndex(null);') ??
+        Future.value());
+  }
+
   void _edit(void Function(SheetEditDocument, int) operation) {
     if (_selected == null) return;
     try {
@@ -282,9 +292,14 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
   Widget build(BuildContext context) {
     final note = _loadError == null ? _note : null;
     return PopScope(
-        canPop: !_dirty || _leaving,
+        canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) unawaited(_leave());
+          if (didPop) return;
+          if (_selected != null) {
+            _deselect();
+            return;
+          }
+          unawaited(_leave());
         },
         child: Scaffold(
           appBar: AppBar(
@@ -333,8 +348,12 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
                                                 final index =
                                                     (args.firstOrNull as num?)
                                                         ?.toInt();
-                                                if (mounted && index != null) {
-                                                  _select(index);
+                                                if (mounted) {
+                                                  if (index != null) {
+                                                    _select(index);
+                                                  } else {
+                                                    _deselect();
+                                                  }
                                                 }
                                                 return null;
                                               });
@@ -384,7 +403,12 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
                                                           note.index + 1)
                                                       : null,
                                                   icon: const Icon(
-                                                      Icons.chevron_right))
+                                                      Icons.chevron_right)),
+                                              IconButton(
+                                                  tooltip: 'Close dialogue',
+                                                  onPressed: _deselect,
+                                                  icon: const Icon(
+                                                      Icons.close)),
                                             ]),
                                             _buildNotationToolbar(note),
                                             const SizedBox(height: 6),

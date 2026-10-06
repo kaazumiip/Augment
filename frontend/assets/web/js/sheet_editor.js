@@ -46,25 +46,66 @@ function mapNotes(notes) {
 }
 window.selectScoreIndex = function(index) {
   selectedIndex = index;
-  const selected = noteMap.find(n => n.index === index);
   const highlight = document.getElementById('selection');
-  if (!selected) { highlight.style.display = 'none'; return; }
+  if (index === null || index === undefined) {
+    if (highlight) highlight.style.display = 'none';
+    return;
+  }
+  const selected = noteMap.find(n => n.index === index);
+  if (!selected) { if (highlight) highlight.style.display = 'none'; return; }
   const rect = selected.element.getBoundingClientRect();
-  Object.assign(highlight.style, {display:'block',left:`${rect.left + scrollX - 5}px`,top:`${rect.top + scrollY - 5}px`,width:`${Math.max(12,rect.width)+10}px`,height:`${Math.max(12,rect.height)+10}px`});
+  if (highlight) {
+    Object.assign(highlight.style, {
+      display: 'block',
+      left: `${rect.left + window.scrollX - 5}px`,
+      top: `${rect.top + window.scrollY - 5}px`,
+      width: `${Math.max(12, rect.width) + 10}px`,
+      height: `${Math.max(12, rect.height) + 10}px`
+    });
+  }
+  try {
+    selected.element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    setTimeout(() => {
+      if (selected.element && highlight) {
+        const r2 = selected.element.getBoundingClientRect();
+        highlight.style.left = `${r2.left + window.scrollX - 5}px`;
+        highlight.style.top = `${r2.top + window.scrollY - 5}px`;
+      }
+    }, 120);
+  } catch (_) {}
 };
-let down = null;
-scoreElement.addEventListener('pointerdown', e => { down = {x:e.clientX,y:e.clientY}; });
+let down = null, lastTapTime = 0;
+scoreElement.addEventListener('pointerdown', e => {
+  down = { x: e.clientX, y: e.clientY, time: Date.now() };
+});
 scoreElement.addEventListener('pointerup', e => {
-  if (!down || Math.hypot(down.x-e.clientX,down.y-e.clientY)>12) return;
+  if (!down) return;
+  const dist = Math.hypot(down.x - e.clientX, down.y - e.clientY);
+  const elapsed = Date.now() - down.time;
   down = null;
-  let best = null, distance = 28;
+  if (dist > 18 || elapsed > 700) return;
+
+  const now = Date.now();
+  if (now - lastTapTime < 200) return;
+  lastTapTime = now;
+
+  let best = null, distance = 40;
   for (const note of noteMap) {
+    if (!note.element) continue;
     const r = note.element.getBoundingClientRect();
-    const d = Math.hypot(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2));
+    const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
     if (d < distance) { distance = d; best = note; }
   }
-  if (best) { window.selectScoreIndex(best.index); window.flutter_inappwebview?.callHandler('selectScoreNote',best.index); }
+  if (best) {
+    window.selectScoreIndex(best.index);
+    window.flutter_inappwebview?.callHandler('selectScoreNote', best.index);
+  } else {
+    window.selectScoreIndex(null);
+    window.flutter_inappwebview?.callHandler('selectScoreNote', null);
+  }
 });
+scoreElement.addEventListener('pointercancel', () => { down = null; });
+window.addEventListener('pointercancel', () => { down = null; });
 window.updateScore = function(xml,notes,index) {
   currentXml = xml; currentNotes = notes; selectedIndex = index;
   queue = queue.catch(() => {}).then(async () => {
@@ -103,8 +144,16 @@ window.updateScore = function(xml,notes,index) {
   });
   return queue;
 };
+let lastWidth = window.innerWidth;
 window.addEventListener('resize', () => {
+  if (Math.abs(window.innerWidth - lastWidth) < 12) {
+    if (selectedIndex !== null) {
+      window.selectScoreIndex(selectedIndex);
+    }
+    return;
+  }
+  lastWidth = window.innerWidth;
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => window.updateScore(currentXml,currentNotes,selectedIndex),150);
+  resizeTimer = setTimeout(() => window.updateScore(currentXml, currentNotes, selectedIndex), 150);
 });
-window.updateScore(initialXml,initialNotes,null);
+window.updateScore(initialXml, initialNotes, null);

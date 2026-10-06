@@ -95,4 +95,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('can navigate to other note and close dialogue', (tester) async {
+    SharedPreferences.setMockInitialValues({'sheet_editor_tour_v3': true});
+    await tester.pumpWidget(MaterialApp(
+        home: MusicNoteEditorPage(
+            musicXml: editorFixture,
+            osmdScriptUrl: '',
+            apiBaseUrls: const [],
+            scoreBuilder: (ctx, select) => Center(
+                child: TextButton(
+                    onPressed: () => select(0),
+                    child: const Text('Select C4'))))));
+    await tester.pumpAndSettle();
+    expect(find.text('Tap a note on the sheet to change it.'), findsOneWidget);
+
+    // Select note 0
+    await tester.tap(find.text('Select C4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · C4'), findsOneWidget);
+
+    // Navigate to next note (rest)
+    await tester.tap(find.byTooltip('Next note'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · Rest'), findsOneWidget);
+
+    // Navigate to previous note
+    await tester.tap(find.byTooltip('Previous note'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · C4'), findsOneWidget);
+
+    // Close the dialogue
+    await tester.tap(find.byTooltip('Close dialogue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tap a note on the sheet to change it.'), findsOneWidget);
+    expect(find.text('Bar 1 · C4'), findsNothing);
+  });
 }
