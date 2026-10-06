@@ -771,6 +771,126 @@ def _extract_piano_pedal_events(midi_path):
     return sorted(events, key=lambda event: event['time'])
 
 
+def _extract_score_elements_from_score(score):
+    elements = []
+    for el in score.recurse().notesAndRests:
+        try:
+            offset = float(el.getOffsetInHierarchy(score))
+        except Exception:
+            offset = float(el.offset)
+        m_num = el.measureNumber or 0
+        if el.isRest:
+            pitches = []
+        elif el.isChord:
+            pitches = [p.midi for p in el.pitches]
+        else:
+            pitches = [el.pitch.midi]
+        elements.append({
+            'measure': m_num,
+            'offset': offset,
+            'dur': float(el.duration.quarterLength),
+            'is_rest': el.isRest,
+            'pitches': pitches,
+        })
+    return elements
+
+
+def _diff_score_elements(e1, e2):
+    diffs = []
+    if len(e1) == len(e2):
+        for i, (a, b) in enumerate(zip(e1, e2)):
+            if (a['pitches'] != b['pitches'] or 
+                    a['is_rest'] != b['is_rest'] or 
+                    abs(a['dur'] - b['dur']) > 0.01):
+                diffs.append({'type': 'modify', 'old': a, 'new': b})
+        return diffs
+
+    measures = sorted(set([e['measure'] for e in e1] + [e['measure'] for e in e2]))
+    for m in measures:
+        e1_m = [e for e in e1 if e['measure'] == m]
+        e2_m = [e for e in e2 if e['measure'] == m]
+        matched_e1 = set()
+        for b in e2_m:
+            best_a = None
+            best_dist = 999.0
+            best_idx = -1
+            for idx, a in enumerate(e1_m):
+                if idx in matched_e1:
+                    continue
+                d = abs(a['offset'] - b['offset'])
+                if d < best_dist:
+                    best_dist = d
+                    best_a = a
+                    best_idx = idx
+            if best_a and best_dist <= 0.25:
+                matched_e1.add(best_idx)
+                if (best_a['pitches'] != b['pitches'] or 
+                        best_a['is_rest'] != b['is_rest'] or 
+                        abs(best_a['dur'] - b['dur']) > 0.01):
+                    diffs.append({'type': 'modify', 'old': best_a, 'new': b})
+            else:
+                diffs.append({'type': 'insert', 'old': None, 'new': b})
+        for idx, a in enumerate(e1_m):
+            if idx not in matched_e1:
+                diffs.append({'type': 'delete', 'old': a, 'new': None})
+    return diffs
+
+
+def _patch_performance_notes(notes, diffs, tempo_points, tempo_bpm):
+    if not diffs:
+        return notes
+    seconds_per_quarter = 60.0 / max(1.0, float(tempo_bpm))
+    for d in diffs:
+        if d['type'] in ('modify', 'delete'):
+            old_elem = d['old']
+            old_pitches = old_elem['pitches']
+            score_sec = _seconds_for_offset(old_elem['offset'], tempo_points)
+            target_names = [pretty_midi.note_number_to_name(p) for p in old_pitches]
+
+            candidates = []
+            for idx, ev in enumerate(notes):
+                ev_sec = float(ev['offset']) * seconds_per_quarter
+                if abs(ev_sec - score_sec) < 0.65:
+                    score_match = sum(1 for name in target_names if name in ev.get('pitches', []))
+                    candidates.append((score_match, -abs(ev_sec - score_sec), idx, ev))
+
+            if candidates:
+                candidates.sort(reverse=True)
+                idx, ev = candidates[0][2], candidates[0][3]
+                if d['type'] == 'delete' or (d['type'] == 'modify' and d['new']['is_rest']):
+                    for name in target_names:
+                        if name in ev['pitches']:
+                            ev['pitches'].remove(name)
+                    if not ev['pitches']:
+                        notes.pop(idx)
+                elif d['type'] == 'modify':
+                    new_pitches = d['new']['pitches']
+                    if new_pitches:
+                        ev['pitches'] = [pretty_midi.note_number_to_name(p) for p in new_pitches]
+                    if old_elem['dur'] > 0 and d['new']['dur'] > 0:
+                        ratio = d['new']['dur'] / old_elem['dur']
+                        ev['duration'] = max(0.05, float(ev['duration']) * ratio)
+        elif d['type'] == 'insert':
+            new_elem = d['new']
+            if not new_elem['is_rest'] and new_elem['pitches']:
+                new_sec = _seconds_for_offset(new_elem['offset'], tempo_points)
+                new_offset = new_sec / seconds_per_quarter
+                new_dur = new_elem['dur']
+                nearest_vel = 80
+                if notes:
+                    nearest = min(notes, key=lambda ev: abs(float(ev['offset']) - new_offset))
+                    nearest_vel = nearest.get('velocity', 80)
+                notes.append({
+                    'pitches': [pretty_midi.note_number_to_name(p) for p in new_elem['pitches']],
+                    'offset': new_offset,
+                    'duration': new_dur,
+                    'velocity': nearest_vel,
+                    'preserve_piano_performance': True,
+                })
+    notes.sort(key=lambda ev: float(ev['offset']))
+    return notes
+
+
 def _attach_playback_techniques(notes_data, techniques, tempo_bpm):
     """Attach contour-detected vibrato to the nearest rendered lead note."""
     if not techniques or not notes_data:
@@ -990,6 +1110,15 @@ def score_to_wav(score, output_path, fallback_instrument='Piano', default_bpm=12
                 velocity = max(76, min(120, round(detected_velocity * 1.08)))
             elif is_piano_left_hand:
                 velocity = max(44, min(88, round(detected_velocity * 0.76)))
+            elif instrument_name == 'Piano':
+                first_pitch = getattr(element, 'pitch', None)
+                if first_pitch is None and getattr(element, 'pitches', None):
+                    first_pitch = element.pitches[0]
+                pitch_val = first_pitch.midi if first_pitch else 60
+                if pitch_val >= 60:
+                    velocity = max(76, min(120, round(detected_velocity * 1.08)))
+                else:
+                    velocity = max(44, min(88, round(detected_velocity * 0.76)))
             else:
                 velocity = max(42, min(112, detected_velocity))
             articulation_names = {a.__class__.__name__ for a in getattr(element, 'articulations', [])}
@@ -1092,8 +1221,8 @@ def score_to_wav(score, output_path, fallback_instrument='Piano', default_bpm=12
                 'role': 'piano_melody' if is_piano_right_hand else (
                     'piano_bass' if is_piano_left_hand else (
                         'lead' if is_continuous_lead else None)),
-                'volume': 110 if is_piano_right_hand else (84 if is_piano_left_hand else 100),
-                'reverb': 92 if is_piano_right_hand else (68 if is_piano_left_hand else 56),
+                'volume': 118 if instrument_name == 'Piano' else (110 if is_piano_right_hand else (84 if is_piano_left_hand else 100)),
+                'reverb': 48 if instrument_name == 'Piano' else (92 if is_piano_right_hand else (68 if is_piano_left_hand else 56)),
             })
     if not performance_parts:
         return False, 0.0, []
@@ -1623,7 +1752,7 @@ def _add_lead_midi_expression(inst, instrument_name, plan):
     inst.pitch_bends.append(pretty_midi.PitchBend(0, min(time, end)))
 
 
-def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
+def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120, save_midi_path=None):
     """Render one or more score parts with their correct GM programs."""
     if not parts:
         return False, 0.0
@@ -1814,6 +1943,12 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120):
             ])
         rendered_instrument.control_changes.sort(key=lambda event: event.time)
         rendered_instrument.pitch_bends.sort(key=lambda event: event.time)
+    if save_midi_path:
+        try:
+            midi_obj.write(save_midi_path)
+            print(f'[playback] Performance MIDI written to {save_midi_path}', flush=True)
+        except Exception as exc:
+            print(f'[playback] Could not save performance MIDI: {exc}', flush=True)
     try:
         if not soundfont_path:
             raise FileNotFoundError(
@@ -2249,13 +2384,21 @@ def generate_sheet():
                 target = os.path.join(OUTPUT_FOLDER, os.path.basename(part['musicxml']))
                 shutil.copy2(part['musicxml'], target)
                 target_name = os.path.basename(target)
+                target_stem = os.path.splitext(target_name)[0]
                 part_pdf_file, part_pdf_available = _prepare_pdf_artifact(target)
+                perf_midi_filename = None
+                perf_midi_source = part.get('_performance_midi_path')
+                if perf_midi_source and os.path.isfile(perf_midi_source):
+                    perf_midi_filename = f'{target_stem}_performance.mid'
+                    perf_midi_target = os.path.join(OUTPUT_FOLDER, perf_midi_filename)
+                    shutil.copy2(perf_midi_source, perf_midi_target)
                 response_parts.append({
                     **part,
                     'musicxml': target_name,
                     'output_file': target_name,
                     'pdf_file': part_pdf_file,
                     'pdf_available': part_pdf_available,
+                    'performance_midi': perf_midi_filename,
                 })
             combined_file = None
             combined_pdf_file = None
@@ -2396,6 +2539,7 @@ def generate_sheet():
                 # Preserve the existing Flutter single-sheet response contract.
                 'instrument': 'Band' if mode == 'band' else primary_part['instrument'],
                 'output_file': combined_file if mode == 'band' and combined_file else primary_part['output_file'],
+                'performance_midi': primary_part.get('performance_midi'),
                 'pdf_file': (combined_pdf_file if mode == 'band' and combined_file
                              else primary_part.get('pdf_file')),
                 'pdf_available': (combined_pdf_available if mode == 'band' and combined_file
@@ -3291,6 +3435,8 @@ def download_sheet(filename):
                 '.pdf': 'application/pdf',
                 '.musicxml': 'application/xml',
                 '.xml': 'application/xml',
+                '.mid': 'audio/midi',
+                '.midi': 'audio/midi',
             }
             mimetype = mime_map.get(ext, 'application/octet-stream')
             return send_file(
@@ -3310,10 +3456,11 @@ def download_sheet(filename):
 def render_edited_sheet():
     """Render user-edited MusicXML without re-running transcription.
 
-    Editing a note in the studio changes the written score first.  This route
-    then builds a fresh playback WAV from that exact MusicXML, so notation and
-    sound cannot drift apart.
+    Editing a note in the studio patches the authentic performance MIDI
+    with the exact note change, preserving all original velocities,
+    microtiming, and Steinway CC64 damper pedal acoustic resonance.
     """
+    temp_perf_file = None
     try:
         payload = request.get_json(silent=True) or {}
         musicxml_content = payload.get('musicxml_content')
@@ -3340,12 +3487,108 @@ def render_edited_sheet():
         stem = os.path.splitext(requested_name)[0]
         audio_filename = f'{stem}_edited.wav'
         audio_path = os.path.join(OUTPUT_FOLDER, audio_filename)
-        audio_generated, audio_duration, playback_events = score_to_wav(
-            score,
-            audio_path,
-            fallback_instrument=instrument_name,
-            default_bpm=tempo_bpm,
-        )
+        new_perf_midi_filename = f'{stem}_performance.mid'
+        new_perf_midi_path = os.path.join(OUTPUT_FOLDER, new_perf_midi_filename)
+
+        source_output_file = payload.get('source_output_file')
+        source_musicxml_content = payload.get('source_musicxml_content')
+        perf_midi_b64 = payload.get('performance_midi_base64')
+
+        perf_midi_path = None
+        if perf_midi_b64 and isinstance(perf_midi_b64, str):
+            try:
+                import base64
+                midi_bytes = base64.b64decode(perf_midi_b64)
+                temp_perf_file = os.path.join(OUTPUT_FOLDER, f'{stem}_incoming_perf.mid')
+                with open(temp_perf_file, 'wb') as pf:
+                    pf.write(midi_bytes)
+                perf_midi_path = temp_perf_file
+            except Exception as e:
+                print(f'[render_edited_sheet] Failed to decode performance_midi_base64: {e}', flush=True)
+
+        if not perf_midi_path and source_output_file:
+            clean_source = os.path.basename(source_output_file.split('--')[-1])
+            src_stem = os.path.splitext(clean_source)[0]
+            candidates = [
+                os.path.join(OUTPUT_FOLDER, f'{src_stem}_performance.mid'),
+                os.path.join(OUTPUT_FOLDER, f'{src_stem}.piano_v2_2_performance.mid'),
+                os.path.join(OUTPUT_FOLDER, f'{src_stem}.mid'),
+            ]
+            for candidate in candidates:
+                if os.path.isfile(candidate):
+                    perf_midi_path = candidate
+                    break
+            if not perf_midi_path:
+                for root, _, files in os.walk(OUTPUT_FOLDER):
+                    for f in files:
+                        if (f.startswith(src_stem) or src_stem.startswith(os.path.splitext(f)[0])) and f.endswith(('.mid', '.midi')):
+                            cand = os.path.join(root, f)
+                            if os.path.isfile(cand):
+                                perf_midi_path = cand
+                                break
+                    if perf_midi_path:
+                        break
+
+        source_score = None
+        if source_musicxml_content and isinstance(source_musicxml_content, str):
+            try:
+                source_score = converter.parseData(source_musicxml_content, format='musicxml')
+            except Exception as e:
+                print(f'[render_edited_sheet] Failed to parse source_musicxml_content: {e}', flush=True)
+        elif source_output_file:
+            clean_source = os.path.basename(source_output_file.split('--')[-1])
+            src_xml_path = os.path.join(OUTPUT_FOLDER, clean_source)
+            if os.path.isfile(src_xml_path):
+                try:
+                    source_score = converter.parse(src_xml_path)
+                except Exception as e:
+                    print(f'[render_edited_sheet] Failed to parse source xml file: {e}', flush=True)
+
+        audio_generated = False
+        audio_duration = 0.0
+        playback_events = []
+
+        if perf_midi_path and os.path.isfile(perf_midi_path):
+            try:
+                print(f'[render_edited_sheet] Patching performance from {perf_midi_path}', flush=True)
+                part_notes = _extract_performance_notes(
+                    perf_midi_path, instrument_name, tempo_bpm,
+                    preserve_piano_performance=(instrument_name == 'Piano'),
+                    preserve_violin_performance=(instrument_name == 'Violin'),
+                )
+                predicted_pedal = []
+                if instrument_name == 'Piano':
+                    predicted_pedal = _extract_piano_pedal_events(perf_midi_path)
+
+                if source_score:
+                    e1 = _extract_score_elements_from_score(source_score)
+                    e2 = _extract_score_elements_from_score(score)
+                    diffs = _diff_score_elements(e1, e2)
+                    print(f'[render_edited_sheet] Detected {len(diffs)} diffs between source and edited score', flush=True)
+                    tempo_points = _tempo_map(source_score, tempo_bpm)
+                    part_notes = _patch_performance_notes(part_notes, diffs, tempo_points, tempo_bpm)
+
+                render_part = _band_playback_part(
+                    instrument_name, 'melody', part_notes,
+                    tempo_bpm=tempo_bpm, pedal_events=predicted_pedal,
+                )
+                audio_generated, audio_duration = parts_to_wav(
+                    [render_part], audio_path, tempo_bpm=tempo_bpm, save_midi_path=new_perf_midi_path,
+                )
+                playback_events = part_notes
+                print(f'[render_edited_sheet] Patched playback generated: {audio_generated}, duration: {audio_duration:.2f}s', flush=True)
+            except Exception as exc:
+                print(f'[render_edited_sheet] Performance patching failed, falling back to score_to_wav: {exc}', flush=True)
+                traceback.print_exc()
+
+        if not audio_generated:
+            audio_generated, audio_duration, playback_events = score_to_wav(
+                score,
+                audio_path,
+                fallback_instrument=instrument_name,
+                default_bpm=tempo_bpm,
+            )
+
         notes_data = _extract_notes_data(score, instrument_name)
         sheet_prefix = os.path.join(OUTPUT_FOLDER, f'{stem}_edited_sheet')
         sheet_image_path, png_generated = render_musicxml_to_png(
@@ -3360,6 +3603,7 @@ def render_edited_sheet():
             'success': True,
             'instrument': instrument_name,
             'output_file': requested_name,
+            'performance_midi': new_perf_midi_filename if os.path.isfile(new_perf_midi_path) else None,
             'musicxml_available': True,
             'audio_file': audio_filename if audio_generated else None,
             'audio_available': audio_generated,
@@ -3378,6 +3622,12 @@ def render_edited_sheet():
         print(f'[render_edited_sheet] Failed: {exc}')
         traceback.print_exc()
         return jsonify({'error': 'Could not render the edited sheet.'}), 400
+    finally:
+        if temp_perf_file and os.path.isfile(temp_perf_file):
+            try:
+                os.remove(temp_perf_file)
+            except OSError:
+                pass
 
 
 @app.route('/api/sheet/preview-bar', methods=['POST'])

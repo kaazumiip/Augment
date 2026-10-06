@@ -341,7 +341,7 @@ function safePathPart(value) {
 function collectArtifactNames(value, names = new Set()) {
   if (!value || typeof value !== 'object') return names;
   const artifactKeys = new Set([
-    'output_file', 'pdf_file', 'audio_file', 'sheet_image', 'combined_musicxml',
+    'output_file', 'pdf_file', 'audio_file', 'sheet_image', 'combined_musicxml', 'performance_midi',
   ]);
   for (const [key, child] of Object.entries(value)) {
     if (artifactKeys.has(key) && typeof child === 'string' && child) {
@@ -359,7 +359,7 @@ function collectArtifactNames(value, names = new Set()) {
 function rewriteArtifactNames(value, jobId) {
   if (!value || typeof value !== 'object') return value;
   const artifactKeys = new Set([
-    'output_file', 'pdf_file', 'audio_file', 'sheet_image', 'combined_musicxml',
+    'output_file', 'pdf_file', 'audio_file', 'sheet_image', 'combined_musicxml', 'performance_midi',
   ]);
   if (Array.isArray(value)) {
     return value.map((item) => rewriteArtifactNames(item, jobId));
@@ -1789,6 +1789,8 @@ app.get('/api/sheet/download/:filename', requireFirebaseUser, async (req, res) =
       '.pdf': 'application/pdf',
       '.musicxml': 'application/xml',
       '.xml': 'application/xml',
+      '.mid': 'audio/midi',
+      '.midi': 'audio/midi',
     };
     const contentType = mimeMap[ext] || 'application/octet-stream';
 
@@ -1819,15 +1821,65 @@ app.post('/api/sheet/preview-bar', requireFirebaseUser, async (req, res) => {
 
 app.post('/api/sheet/render-edited', requireFirebaseUser, async (req, res) => {
   try {
-    // Fresh filenames prevent an edit from overwriting another user's output.
     const jobId = crypto.randomUUID();
+    const sourceOutputFile = String(req.body.output_file || '');
+    let sourceMusicxmlContent = null;
+    let performanceMidiBase64 = null;
+
+    let sourceDir = null;
+    const separatorIndex = sourceOutputFile.indexOf('--');
+    if (separatorIndex > 0) {
+      const sourceJobId = sourceOutputFile.slice(0, separatorIndex);
+      sourceDir = path.join(generatedRoot, safePathPart(req.userId), sourceJobId);
+    }
+    if (!sourceDir || !fs.existsSync(sourceDir)) {
+      const userDir = path.join(generatedRoot, safePathPart(req.userId));
+      if (fs.existsSync(userDir)) {
+        const cleanName = path.basename(sourceOutputFile);
+        for (const entry of fs.readdirSync(userDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const candidateDir = path.join(userDir, entry.name);
+            if (fs.existsSync(path.join(candidateDir, cleanName))) {
+              sourceDir = candidateDir;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (sourceDir && fs.existsSync(sourceDir)) {
+      try {
+        const files = fs.readdirSync(sourceDir);
+        const xmlFile = files.find((f) => f.endsWith('.musicxml') || f.endsWith('.xml'));
+        if (xmlFile) {
+          sourceMusicxmlContent = fs.readFileSync(path.join(sourceDir, xmlFile), 'utf8');
+        }
+        const midiFile = files.find((f) => f.includes('performance') && f.endsWith('.mid'))
+          || files.find((f) => f.endsWith('.mid'));
+        if (midiFile) {
+          performanceMidiBase64 = fs.readFileSync(path.join(sourceDir, midiFile)).toString('base64');
+        }
+      } catch (err) {
+        console.warn('[render-edited] Could not read source artifacts from disk:', err.message);
+      }
+    }
+
     const response = await pythonRequest('post', '/api/sheet/render-edited', {
-      data: { musicxml_content: req.body.musicxml_content, instrument: req.body.instrument,
-        output_file: `edited_${jobId}.musicxml` }, timeout: 180000,
+      data: {
+        musicxml_content: req.body.musicxml_content,
+        instrument: req.body.instrument,
+        output_file: `edited_${jobId}.musicxml`,
+        source_output_file: sourceOutputFile,
+        source_musicxml_content: sourceMusicxmlContent,
+        performance_midi_base64: performanceMidiBase64,
+      },
+      timeout: 180000,
     });
     if (!response.data.audio_available) return res.status(502).json({ error: 'Edited playback could not be prepared.' });
     res.json(await storeArtifactsForUser(response.data, req.userId, jobId));
   } catch (error) {
+    console.error('[render-edited] Failed:', error.response?.data || error.message);
     res.status(error.response?.status || 502).json({ error: 'Could not save edited playback. Please try again.' });
   }
 });
