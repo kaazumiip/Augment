@@ -1491,6 +1491,14 @@ def _select_supported_piano_lead(lead_source, lead_midi_path, lead_stats, stem_d
             selection['selected_source'] = os.path.basename(source)
             stats['source_selection'] = selection
             return source, stats, True
+        if (os.path.basename(lead_source) == 'vocals.wav' and
+                lead_stats.get('notes', 0) >= 4 and
+                primary_score is not None and primary_score >= .15):
+            # Prioritize the actual vocal melody when alternate instrumental candidates
+            # are also weak, ensuring the song's lead is not discarded in Solo Piano.
+            selection['selected_source'] = 'vocals.wav'
+            lead_stats['source_selection'] = selection
+            return lead_source, lead_stats, True
         selection['selected_source'] = None
         lead_stats['source_selection'] = selection
         lead_stats['rejected_as_unreliable_lead'] = True
@@ -4043,7 +4051,7 @@ def build_pipeline(audio_path, output_dir, mode="solo", instruments_config=None,
             # This preserves hooks and interludes instead of leaving blanks.
             hybrid_lead = False
             fill_instrumental_gaps = (
-                mode == 'band' and
+                mode in ('band', 'solo') and
                 os.environ.get('AUGMENT_FILL_MELODY_GAPS', '1') != '0'
             )
             if (fill_instrumental_gaps and not piano_arrangement and stem == "vocals" and

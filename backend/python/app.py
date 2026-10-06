@@ -653,12 +653,17 @@ def _extract_notes_data(score, instrument_name=None):
         active_ties = {}
         part_name = (part.partName or '').lower()
         if instrument_name in {'Piano', 'Synthesizer', 'Organ'} and len(score_parts) > 1:
-            role = 'piano_melody' if part_index == 0 else 'piano_bass'
+            base_role = 'piano_melody' if part_index == 0 else 'piano_bass'
         else:
-            role = ('piano_melody' if 'right hand' in part_name else
-                    'piano_bass' if 'left hand' in part_name else None)
+            base_role = ('piano_melody' if 'right hand' in part_name else
+                         'piano_bass' if 'left hand' in part_name else None)
         flat = _safe_flatten(part)
         for element in flat.notes:
+            role = base_role
+            if base_role == 'piano_melody':
+                stem_dir = getattr(element, 'stemDirection', None)
+                if stem_dir == 'down':
+                    role = 'piano_support'
             if isinstance(element, note.Note):
                 entry = {
                     'pitches': [element.nameWithOctave],
@@ -1230,28 +1235,27 @@ def score_to_wav(score, output_path, fallback_instrument='Piano', default_bpm=12
     for cursor_event in cursor_events:
         cursor_event.pop('_source_event', None)
 
-    # Keep sustained left-hand harmony present, but duck it whenever it would
-    # mask an active right-hand melody. This is audio mixing only; the score
-    # retains the exact notes and durations it generated.
+    # Keep sustained accompaniment harmony present, but duck it whenever it would
+    # mask an active melody. This is audio mixing only; the score retains the exact notes.
     melody_events = [
         event for part in performance_parts if part.get('role') == 'piano_melody'
         for event in part['notes']
+        if event.get('role') != 'piano_support'
     ]
     if melody_events:
-        for bass_part in (part for part in performance_parts
-                          if part.get('role') == 'piano_bass'):
-            for bass_event in bass_part['notes']:
-                bass_start = bass_event['offset']
-                bass_end = bass_start + bass_event['duration']
-                overlaps_melody = any(
-                    melody['offset'] < bass_end and
-                    melody['offset'] + melody['duration'] > bass_start
-                    for melody in melody_events
-                )
-                if overlaps_melody:
-                    # Light ducking keeps the lead clear without making the
-                    # accompaniment disappear whenever it overlaps a melody.
-                    bass_event['velocity'] = min(int(bass_event['velocity']), 52)
+        for backing_part in (part for part in performance_parts
+                             if part.get('role') in ('piano_bass', 'piano_melody')):
+            for backing_event in backing_part['notes']:
+                if backing_event.get('role') in ('piano_bass', 'piano_support'):
+                    start = backing_event['offset']
+                    end = start + backing_event['duration']
+                    overlaps_melody = any(
+                        melody['offset'] < end and
+                        melody['offset'] + melody['duration'] > start
+                        for melody in melody_events
+                    )
+                    if overlaps_melody:
+                        backing_event['velocity'] = min(int(backing_event['velocity']), 52)
     # These offsets are already seconds, so render them at 60 BPM (one quarter = one second).
     success, duration = parts_to_wav(performance_parts, output_path, tempo_bpm=60)
     return success, duration, sorted(cursor_events, key=lambda event: event['time'])
@@ -1569,9 +1573,11 @@ def _piano_hand_velocity(event):
     velocity = int(event.get('velocity', 80))
     if event.get('role') == 'piano_bass':
         density = max(1, len(event.get('pitches', [])))
-        return max(40, min(90, round(velocity / density ** 0.1)))
+        return max(40, min(86, round(velocity / density ** 0.1)))
+    if event.get('role') == 'piano_support':
+        return max(46, min(70, round(velocity * 0.78)))
     if event.get('role') == 'piano_melody':
-        return max(55, min(112, round(velocity * 1.08)))
+        return max(74, min(118, round(velocity * 1.12)))
     return None
 
 
@@ -1894,8 +1900,15 @@ def parts_to_wav(parts, output_path, sample_rate=44100, tempo_bpm=120, save_midi
                 chord_pitches = [(pitch_name, 0.0) for pitch_name in chord_pitches]
             for pitch_name, note_offset in chord_pitches:
                 midi_pitch = max(0, min(127, pitch_to_midi(pitch_name)))
+                pitch_velocity = event_velocity
+                if instrument_name == 'Piano' and len(chord_pitches) > 1 and not event.get('preserve_piano_performance'):
+                    # Voice piano chords so the top pitch (melody/lead) sings out clearly
+                    # and inner harmony notes support without overpowering the melody.
+                    is_top_pitch = (pitch_name == max(chord_pitches, key=lambda cp: pitch_to_midi(cp[0]))[0])
+                    if not is_top_pitch:
+                        pitch_velocity = max(44, min(76, round(event_velocity * 0.80)))
                 inst.notes.append(pretty_midi.Note(
-                    velocity=event_velocity,
+                    velocity=pitch_velocity,
                     pitch=midi_pitch,
                     start=start_time + note_offset,
                     end=start_time + note_offset + duration_seconds,
@@ -3094,21 +3107,31 @@ def generate_from_youtube():
                 target = os.path.join(
                     OUTPUT_FOLDER, os.path.basename(part_data['musicxml']))
                 shutil.copy2(part_data['musicxml'], target)
+                target_name = os.path.basename(target)
+                target_stem = os.path.splitext(target_name)[0]
                 part_pdf_file, part_pdf_available = _prepare_pdf_artifact(target)
+                perf_midi_filename = None
+                perf_midi_source = part_data.get('_performance_midi_path')
+                if perf_midi_source and os.path.isfile(perf_midi_source):
+                    perf_midi_filename = f'{target_stem}_performance.mid'
+                    perf_midi_target = os.path.join(OUTPUT_FOLDER, perf_midi_filename)
+                    shutil.copy2(perf_midi_source, perf_midi_target)
                 response_part = {
                     **part_data,
-                    'musicxml': os.path.basename(target),
-                    'output_file': os.path.basename(target),
+                    'musicxml': target_name,
+                    'output_file': target_name,
                     'pdf_file': part_pdf_file,
                     'pdf_available': part_pdf_available,
+                    'performance_midi': perf_midi_filename,
                 }
                 response_parts.append(response_part)
                 performance_midi = part_data.get('_performance_midi_path')
-                if ((requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance')) and
+                if ((requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') or part_data.get('_preserve_piano_performance')) and
                         performance_midi and os.path.isfile(performance_midi)):
                     part_notes = _extract_performance_notes(
                         performance_midi, part_data['instrument'],
                         manifest['tempo'],
+                        preserve_piano_performance=bool(part_data.get('_preserve_piano_performance')),
                         preserve_violin_performance=bool(part_data.get('_preserve_violin_performance')),
                         preserve_band_performance=requested_mode == 'band')
                 else:
@@ -3118,7 +3141,7 @@ def generate_from_youtube():
                 response_part['playback_events'] = part_notes
                 render_part = _band_playback_part(
                     part_data['instrument'], part_data.get('role'), part_notes,
-                    (None if requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') else
+                    (None if requested_mode == 'band' or part_data['instrument'] in {'Electric Guitar', 'Flute', 'Saxophone'} or part_data.get('_preserve_violin_performance') or part_data.get('_preserve_piano_performance') else
                      manifest.get('tempo_map')), manifest['tempo'],
                 )
                 render_parts.append(render_part)
