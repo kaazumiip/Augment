@@ -114,6 +114,9 @@ window.updateScore = function(xml,notes,index) {
       noteMap = [];
       document.getElementById('selection').style.display = 'none';
       await loadLibrary();
+      if (!window.opensheetmusicdisplay) {
+        throw new Error('OpenSheetMusicDisplay library is not available');
+      }
       if (!osmd) {
         osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(scoreElement, {
           autoResize: true,
@@ -127,7 +130,7 @@ window.updateScore = function(xml,notes,index) {
           pageFormat: 'A4_P',
         });
       }
-      await osmd.load(new DOMParser().parseFromString(xml, 'application/xml'));
+      await osmd.load(xml);
       if (osmd.EngravingRules) {
         osmd.EngravingRules.RenderPartNames = false;
         osmd.EngravingRules.RenderPartAbbreviations = false;
@@ -140,7 +143,12 @@ window.updateScore = function(xml,notes,index) {
       osmd.render(); mapNotes(notes);
       statusElement.style.display='none';
       window.scrollTo(x,y); window.selectScoreIndex(index);
-    } catch (e) { statusElement.textContent='Could not display the sheet. Reopen the editor to retry.'; statusElement.style.display='block'; throw e; }
+    } catch (e) {
+      console.error('Sheet editor render error:', e);
+      statusElement.textContent='Could not display the sheet. Reopen the editor to retry.';
+      statusElement.style.display='block';
+      throw e;
+    }
   });
   return queue;
 };

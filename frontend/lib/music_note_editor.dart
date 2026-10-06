@@ -65,11 +65,21 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
 
   Future<void> _loadView() async {
     if (_loadError != null || widget.scoreBuilder != null) return;
-    final script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
+    String script = '';
+    String osmdScript = '';
+    try {
+      script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
+      osmdScript = await rootBundle
+          .loadString('assets/web/js/opensheetmusicdisplay.min.js');
+    } catch (_) {
+      script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
+    }
     if (!mounted) return;
     setState(() => _html = '''<!doctype html><html><head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3,user-scalable=yes">
 <style>html,body{margin:0;width:100%;background:#ffffff;overflow:auto;-webkit-overflow-scrolling:touch}#score{width:100%;min-height:100%;padding:2px;position:relative;background:#ffffff}#score svg{background:#ffffff!important}#status{padding:24px;font:14px sans-serif;color:#555}#selection{position:absolute;border:2px solid #ba0007;background:#ba000718;border-radius:4px;pointer-events:none;display:none;box-sizing:border-box}</style>
+${osmdScript.isNotEmpty ? '<script>$osmdScript</script>' : ''}
 </head><body><div id="status">Opening sheet…</div><div id="score"></div><div id="selection"></div>
 <script>var initialXml=${jsonEncode(_xml)}, initialNotes=${jsonEncode(_score.notes.map((n) => n.selectionData).toList())}, scriptUrl=${jsonEncode(widget.osmdScriptUrl)};</script>
 <script>$script</script></body></html>''');
@@ -334,12 +344,20 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
                                         child: CircularProgressIndicator())
                                     : InAppWebView(
                                         initialData: InAppWebViewInitialData(
-                                            data: _html!),
+                                          data: _html!,
+                                          mimeType: 'text/html',
+                                          encoding: 'utf-8',
+                                          baseUrl: WebUri('https://localhost'),
+                                        ),
                                         initialSettings: InAppWebViewSettings(
-                                            javaScriptEnabled: true,
-                                            supportZoom: true,
-                                            builtInZoomControls: true,
-                                            displayZoomControls: false),
+                                          javaScriptEnabled: true,
+                                          supportZoom: true,
+                                          builtInZoomControls: true,
+                                          displayZoomControls: false,
+                                          transparentBackground: true,
+                                          allowFileAccess: true,
+                                          allowContentAccess: true,
+                                        ),
                                         onWebViewCreated: (controller) {
                                           _controller = controller;
                                           controller.addJavaScriptHandler(

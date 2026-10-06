@@ -1632,7 +1632,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       final notationColor = darkScore ? '#FFFFFF' : '#000000';
       final isFullBandView = _bandViews.isNotEmpty && _selectedBandView == 0;
       final scoreZoom = isFullBandView
-          ? (isSmallScreen ? 0.38 : 0.48)
+          ? (isSmallScreen ? 0.28 : 0.36)
           : (isSmallScreen ? 0.46 : 0.60);
       final html = '''
 <!DOCTYPE html>
@@ -1642,8 +1642,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; background: $scoreBackground; color: $notationColor; overflow: auto; -webkit-overflow-scrolling: touch; }
-    #osmdContainer { width: 100%; ${isFullBandView ? 'min-width: 960px;' : ''} min-height: 100%; padding: ${isFullBandView ? '12px' : '2px'}; position: relative; background: $scoreBackground; }
+    html, body { width: 100%; max-width: 100%; background: $scoreBackground; color: $notationColor; overflow-x: ${isFullBandView ? 'hidden' : 'auto'}; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    #osmdContainer { width: 100%; max-width: 100%; min-height: 100%; padding: ${isFullBandView ? '4px 2px' : '2px'}; position: relative; background: $scoreBackground; box-sizing: border-box; }
     #osmdContainer svg { background: $scoreBackground !important; }
     #bandInstrumentRoster { display: none; padding: 8px 10px 4px; gap: 6px; flex-wrap: wrap; font-family: sans-serif; }
     #bandInstrumentRoster span { border: 1px solid #888; border-radius: 999px; padding: 3px 8px; font-size: 11px; color: $notationColor; }
@@ -1961,11 +1961,9 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           window.osmd.DrawingParameters.DrawPartNames = fullBandScore;
         }
         // A compact page view keeps the complete grand-staff system visible
-        // on a phone while preserving the airy layout of a printed score.
-        // Use a wide conductor canvas with compact notation and horizontal
-        // scrolling on phones. Native SVG coordinates preserve cursor alignment.
+        // Fit the full band row into the viewport width without horizontal scrolling.
         window.osmd.zoom = fullBandScore
-          ? 0.48
+          ? (window.innerWidth < 420 ? 0.28 : (window.innerWidth < 768 ? 0.35 : $scoreZoom))
           : $scoreZoom;
         window.osmd.render();
         ensurePlayhead();

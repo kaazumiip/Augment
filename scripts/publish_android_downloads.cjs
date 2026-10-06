@@ -3,17 +3,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const dotenv = require('../backend/node_modules/dotenv');
+const axios = require('../backend/node_modules/axios');
 const root = path.resolve(__dirname, '..');
 const env = dotenv.parse(fs.readFileSync(path.join(root, 'backend/.env')));
 const origin = env.SUPABASE_URL.replace(/\/$/, '');
 const bucket = 'augment-app-downloads';
 const headers = { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, apikey: env.SUPABASE_SERVICE_ROLE_KEY };
 async function request(route, options = {}) {
-  const response = await fetch(origin + '/storage/v1' + route, {
-    ...options, headers: { ...headers, ...options.headers },
+  const response = await axios({
+    url: origin + '/storage/v1' + route,
+    method: options.method || 'GET',
+    headers: { ...headers, ...(options.headers || {}) },
+    data: options.body,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    timeout: 600000,
   });
-  if (!response.ok) throw new Error(`APK publication failed (${response.status})`);
-  return response.json();
+  return response.data;
 }
 (async () => {
   const source = path.join(root, 'landing/public');
@@ -32,11 +38,18 @@ async function request(route, options = {}) {
     if (hash !== apk.sha256) throw new Error(`APK checksum mismatch: ${abi}`);
     const object = `${hash}/${apk.file}`;
     const publicUrl = `${origin}/storage/v1/object/public/${bucket}/${object}`;
-    const uploaded = await fetch(publicUrl, { method: 'HEAD' });
-    if (!uploaded.ok || Number(uploaded.headers.get('content-length')) !== data.length) {
+    let exists = false;
+    try {
+      const head = await axios.head(publicUrl, { timeout: 10000 });
+      if (head.status === 200 && Number(head.headers['content-length']) === data.length) {
+        exists = true;
+      }
+    } catch (_) {}
+    if (!exists) {
+      console.log(`Uploading ${abi} (${data.length} bytes) to Supabase...`);
       await request(`/object/${bucket}/${object}`, { method: 'POST', headers: {
-      'Content-Type': 'application/vnd.android.package-archive', 'x-upsert': 'true',
-    }, body: data });
+        'Content-Type': 'application/vnd.android.package-archive', 'x-upsert': 'true',
+      }, body: data });
     }
     apk.url = publicUrl;
     console.log(`Published ${abi} APK (${data.length} bytes).`);
