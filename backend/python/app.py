@@ -3321,6 +3321,8 @@ def render_edited_sheet():
             return jsonify({'error': 'Edited MusicXML is required.'}), 400
         if len(musicxml_content.encode('utf-8')) > 3_000_000:
             return jsonify({'error': 'Edited MusicXML is too large.'}), 413
+        if '<!ENTITY' in musicxml_content.upper():
+            return jsonify({'error': 'Unsupported XML declaration.'}), 400
 
         instrument_name = str(payload.get('instrument') or 'Piano')
         if instrument_name not in INSTRUMENT_MAP:
@@ -3376,6 +3378,46 @@ def render_edited_sheet():
         print(f'[render_edited_sheet] Failed: {exc}')
         traceback.print_exc()
         return jsonify({'error': 'Could not render the edited sheet.'}), 400
+
+
+@app.route('/api/sheet/preview-bar', methods=['POST'])
+def preview_edited_bar():
+    """Render a bounded score excerpt without exporting or saving a sheet."""
+    temp_path = None
+    try:
+        payload = request.get_json(silent=True) or {}
+        xml = payload.get('musicxml_content')
+        if not isinstance(xml, str) or len(xml.encode('utf-8')) > 200_000:
+            return jsonify({'error': 'A short score excerpt is required.'}), 400
+        if '<!ENTITY' in xml.upper() or '<!DOCTYPE' in xml.upper() and '[' in xml:
+            return jsonify({'error': 'Unsupported XML declaration.'}), 400
+        score = converter.parseData(xml, format='musicxml')
+        if not score.parts or len(score.parts) > 16:
+            raise ValueError('Invalid preview parts')
+        if any(len(list(part.getElementsByClass(stream.Measure))) != 1 for part in score.parts):
+            raise ValueError('Preview must contain one bar per part')
+        if float(score.highestTime) > 32 or len(list(score.recurse().notes)) > 256:
+            raise ValueError('Preview is too long')
+        bpm, _, _ = _detect_score_info(score)
+        bpm = max(40, min(300, bpm))
+        # Bound embedded tempo too, to avoid unexpectedly long preview renders.
+        for mark in score.recurse().getElementsByClass(tempo.MetronomeMark):
+            if mark.number is not None:
+                mark.number = max(40, min(300, float(mark.number)))
+        descriptor, temp_path = tempfile.mkstemp(prefix='augment_bar_', suffix='.wav', dir=OUTPUT_FOLDER)
+        os.close(descriptor)
+        generated, _, _ = score_to_wav(score, temp_path, default_bpm=bpm)
+        if not generated:
+            raise RuntimeError('Preview render failed')
+        with open(temp_path, 'rb') as audio:
+            data = audio.read()
+        return send_file(io.BytesIO(data), mimetype='audio/wav', download_name='bar-preview.wav')
+    except Exception as exc:
+        print(f'[preview_edited_bar] Failed: {exc}')
+        return jsonify({'error': 'Could not preview this bar.'}), 400
+    finally:
+        if temp_path and os.path.isfile(temp_path):
+            os.remove(temp_path)
 
 
 @app.route('/api/sheet/preview-note', methods=['POST'])

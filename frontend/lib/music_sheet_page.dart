@@ -369,6 +369,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       duration: Duration(seconds: 2),
     ));
     _pendingEditedXml = edited.musicXml;
+    final previousOutputFile = _outputFile;
     _savingEditedSheet = true;
     Map<String, dynamic>? rendered;
     try {
@@ -413,7 +414,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       if (mounted) setState(() => _savedToMySheets = true);
     }
     await GeneratedSheetsStore.instance.updateSavedResult(
-      outputFile: _outputFile,
+      outputFile: previousOutputFile,
       result: _activeResult,
       clearCachedAudio: true,
     );

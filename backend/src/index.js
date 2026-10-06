@@ -577,6 +577,7 @@ function processingEstimate(job) {
 }
 
 app.disable('x-powered-by');
+app.use(['/api/sheet/render-edited', '/api/sheet/preview-bar'], express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 const allowedOrigins = new Set(
@@ -1801,6 +1802,33 @@ app.get('/api/sheet/download/:filename', requireFirebaseUser, async (req, res) =
       : (error.message || 'Download request failed');
     console.error(`[Node] Download error for ${req.params.filename}: status=${status}, detail=${detail}`);
     res.status(status).json({ error: 'Could not create the requested file', detail });
+  }
+});
+
+app.post('/api/sheet/preview-bar', requireFirebaseUser, async (req, res) => {
+  try {
+    const response = await pythonRequest('post', '/api/sheet/preview-bar', {
+      data: { musicxml_content: req.body.musicxml_content },
+      responseType: 'arraybuffer', timeout: 45000,
+    });
+    res.type('audio/wav').set('Cache-Control', 'no-store').send(Buffer.from(response.data));
+  } catch (error) {
+    res.status(error.response?.status || 502).json({ error: 'Could not preview this bar. Please try again.' });
+  }
+});
+
+app.post('/api/sheet/render-edited', requireFirebaseUser, async (req, res) => {
+  try {
+    // Fresh filenames prevent an edit from overwriting another user's output.
+    const jobId = crypto.randomUUID();
+    const response = await pythonRequest('post', '/api/sheet/render-edited', {
+      data: { musicxml_content: req.body.musicxml_content, instrument: req.body.instrument,
+        output_file: `edited_${jobId}.musicxml` }, timeout: 180000,
+    });
+    if (!response.data.audio_available) return res.status(502).json({ error: 'Edited playback could not be prepared.' });
+    res.json(await storeArtifactsForUser(response.data, req.userId, jobId));
+  } catch (error) {
+    res.status(error.response?.status || 502).json({ error: 'Could not save edited playback. Please try again.' });
   }
 });
 

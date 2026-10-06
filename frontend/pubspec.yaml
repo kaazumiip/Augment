@@ -2,7 +2,7 @@ name: augment_app
 description: "A premium Flutter music application home page featuring metronome, tuner, pitch detection and sheet music generation."
 publish_to: 'none'
 
-version: 1.0.24+25
+version: 1.0.25+26
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -13,6 +13,7 @@ dependencies:
 
   cupertino_icons: ^1.0.2
   http: ^1.2.0
+  xml: ^6.6.1
   file_picker: ^8.1.7
   audioplayers: ^6.1.0
   url_launcher: ^6.3.1
@@ -62,6 +63,7 @@ flutter:
     - assets/audio/
     - assets/web/index.html
     - assets/web/js/opensheetmusicdisplay.min.js
+    - assets/web/js/sheet_editor.js
 
   fonts:
     - family: Instrument Sans

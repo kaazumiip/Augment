@@ -364,7 +364,7 @@ class GeneratedSheetsStore extends ChangeNotifier {
     final merged = Map<String, dynamic>.from(existing.result)..addAll(result);
     if (clearCachedAudio) {
       // These URLs belong to the previous score revision, not the new render.
-      for (final key in ['cached_audio_path', 'musicxml_url', 'audio_url',
+      for (final key in ['cached_audio_path', 'cached_music_xml_path', 'musicxml_url', 'audio_url',
         'pdf_url', 'sheet_image_url']) {
         merged.remove(key);
       }
@@ -381,7 +381,7 @@ class GeneratedSheetsStore extends ChangeNotifier {
         existing.result['remote_project_id']?.toString(), merged);
     if (clearCachedAudio) {
       await _syncSavedSheetInBackground(
-        outputFile: outputFile,
+        outputFile: merged['output_file']?.toString() ?? outputFile,
         sourceBaseUrl: merged['source_base_url']?.toString() ?? '',
         musicXml: merged['musicxml_content']?.toString(),
       );

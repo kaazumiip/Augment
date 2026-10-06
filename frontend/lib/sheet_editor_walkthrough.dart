@@ -23,11 +23,11 @@ class _EditorTourState extends State<_EditorTour> {
   static const messages = [
     (
       'Choose a note',
-      'Tap a note in the sheet or this note list. Use the bar selector to find the part you want.'
+      'Tap a note directly on the sheet. A red outline shows exactly which note you selected. Use the arrows to select nearby notes.'
     ),
     (
       'Change its sound',
-      'Lower and Higher change the pitch without changing rhythm. Make silent keeps the same time slot. Hear note previews your change.'
+      'Choose a piano key to change the note. Note length changes how long it lasts. Listen to bar plays your edit with the surrounding music.'
     ),
     (
       'Made a mistake?',
