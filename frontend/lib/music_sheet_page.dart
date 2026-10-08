@@ -657,6 +657,9 @@ class _MusicSheetPageState extends State<MusicSheetPage>
         setState(() => _isPlaying = false);
       }
     });
+    if (_isLooping) {
+      await _audioPlayer!.setReleaseMode(ReleaseMode.loop);
+    }
     try {
       await _setAudioSourceWithFallback();
     } catch (e) {
@@ -825,7 +828,10 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  void _toggleLoop() => setState(() => _isLooping = !_isLooping);
+  void _toggleLoop() {
+    setState(() => _isLooping = !_isLooping);
+    _audioPlayer?.setReleaseMode(_isLooping ? ReleaseMode.loop : ReleaseMode.release);
+  }
   void _toggleFullscreen() => setState(() => _isFullscreen = !_isFullscreen);
 
   void _showPlaybackError(String message) {
@@ -1457,13 +1463,23 @@ class _MusicSheetPageState extends State<MusicSheetPage>
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: _toggleLoop,
-                child: Icon(
-                  Icons.repeat,
-                  color: _isLooping
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.4),
-                  size: isSmallScreen ? 20 : 22,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: _isLooping
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isLooping ? Icons.repeat_one : Icons.repeat,
+                    color: _isLooping
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.4),
+                    size: isSmallScreen ? 20 : 22,
+                  ),
                 ),
               ),
               GestureDetector(
