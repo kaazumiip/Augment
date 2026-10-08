@@ -1054,6 +1054,8 @@ class _ComposerCard extends StatelessWidget {
       return InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(compact ? 12 : 16, compact ? 16 : 22,

@@ -193,19 +193,8 @@ class AugmentApp extends StatelessWidget {
   }
 }
 
-// InputDecorator animates this border when a field gains or loses focus.
-// Keep existing field fills/padding and custom borders intact while giving
-// borderless search bars, composers and forms an outlined focus indicator.
-InputDecorationTheme _inputFocusTheme(Color color) => InputDecorationTheme(
-      focusColor: color.withValues(alpha: .08),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: color, width: 2),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: color, width: 2),
-      ),
+InputDecorationTheme _inputFocusTheme(Color color) => const InputDecorationTheme(
+      focusColor: Colors.transparent,
     );
 
 class _StartupGate extends StatefulWidget {

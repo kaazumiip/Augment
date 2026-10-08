@@ -86,6 +86,8 @@ class _MorphingSearchBarState extends State<MorphingSearchBar> {
   @override
   Widget build(BuildContext context) {
     const muted = Color(0xFF898989);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final neutralBorder = isDark ? const Color(0xFF383838) : const Color(0xFFE2E2E2);
     final search = AnimatedContainer(
       duration: const Duration(milliseconds: 230),
       curve: Curves.easeOutCubic,
@@ -96,7 +98,7 @@ class _MorphingSearchBarState extends State<MorphingSearchBar> {
         color: _expanded ? Colors.white : Colors.transparent,
         borderRadius:
             BorderRadius.circular(_expanded ? 22 : widget.collapsedSize / 2),
-        border: _expanded ? Border.all(color: widget.accent, width: 1.2) : null,
+        border: _expanded ? Border.all(color: neutralBorder, width: 1.1) : null,
       ),
       child: Stack(children: [
         if (_expanded)
@@ -111,15 +113,23 @@ class _MorphingSearchBarState extends State<MorphingSearchBar> {
               onChanged: widget.onChanged,
               onSubmitted: widget.onSubmitted,
               textAlignVertical: TextAlignVertical.center,
+              cursorColor: Colors.black87,
               style: const TextStyle(color: Colors.black, fontSize: 13),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search_rounded, color: muted, size: 20),
-                hintText: 'Search',
-                hintStyle: TextStyle(color: muted, fontSize: 12),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded, color: muted, size: 20),
+                hintText: widget.hintText,
+                hintStyle: const TextStyle(color: muted, fontSize: 12),
                 border: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                focusColor: Colors.transparent,
+                hoverColor: Colors.transparent,
                 isDense: true,
-                contentPadding: EdgeInsets.only(top: 1),
-              ).copyWith(hintText: widget.hintText),
+                contentPadding: const EdgeInsets.only(top: 1),
+              ),
             ),
           ),
         Positioned(

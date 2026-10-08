@@ -486,6 +486,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             color: AppPalette.text(context),
                             fontSize: 15,
                             height: 1.25),
+                        cursorColor: AppPalette.text(context),
                         decoration: InputDecoration(
                           hintText: _files.isNotEmpty
                               ? 'Add a caption...'
@@ -495,6 +496,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               fontSize: 13,
                               height: 1.1),
                           border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          focusColor: Colors.transparent,
+                          hoverColor: Colors.transparent,
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),

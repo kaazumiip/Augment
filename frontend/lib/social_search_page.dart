@@ -99,7 +99,12 @@ class _SocialSearchPageState extends State<SocialSearchPage> {
       backgroundColor: AppPalette.page(context),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(21, 24, 29, 24),
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.sizeOf(context).width < 380 ? 14 : 21,
+            24,
+            MediaQuery.sizeOf(context).width < 380 ? 14 : 29,
+            24,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

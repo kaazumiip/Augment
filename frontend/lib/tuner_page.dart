@@ -377,10 +377,17 @@ class _TunerPageState extends State<TunerPage> with WidgetsBindingObserver {
               ),
             ]);
           }
-          final artworkHeight =
-              (constraints.maxHeight - 400).clamp(240.0, 520.0);
+          final isWidePortrait = constraints.maxWidth >= 500 &&
+              (constraints.maxHeight / constraints.maxWidth) < 1.6;
+          final artworkHeight = isWidePortrait
+              ? (constraints.maxHeight - 440).clamp(320.0, 560.0)
+              : (constraints.maxHeight - 400).clamp(240.0, 520.0);
           return SingleChildScrollView(
-            child: Column(children: [panel, _buildArtwork(artworkHeight)]),
+            child: Column(children: [
+              panel,
+              SizedBox(height: isWidePortrait ? 44 : 12),
+              _buildArtwork(artworkHeight),
+            ]),
           );
         }),
       ),

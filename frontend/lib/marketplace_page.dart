@@ -694,11 +694,13 @@ class _MarketplaceSearchPageState extends State<_MarketplaceSearchPage> {
         .where(
             (item) => query.isEmpty || item.title.toLowerCase().contains(query))
         .toList();
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final horizontalPad = screenWidth < 380 ? 16.0 : 28.0;
     return Scaffold(
       backgroundColor: AppPalette.page(context),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+          padding: EdgeInsets.fromLTRB(horizontalPad, 24, horizontalPad, 24),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
@@ -776,82 +778,110 @@ class _MarketplaceSearchResult extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(9),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: Container(
-            height: 108,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppPalette.page(context),
-              border: Border.all(color: AppPalette.border(context)),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Row(children: [
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final imageSize = screenWidth < 360 ? 76.0 : 84.0;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 96),
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: AppPalette.page(context),
+            border: Border.all(color: AppPalette.border(context)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               _MarketplaceArtworkPlaceholder(
-                width: 90,
-                height: 90,
-                borderRadius: 7,
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 8,
                 imageUrl: product.coverUrl,
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: 12),
               Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(product.title,
-                        style: TextStyle(
-                          fontFamily: _MarketplacePageState._font,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.text(context),
-                        )),
-                    const SizedBox(height: 7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color:
-                            _MarketplacePageState._red.withValues(alpha: .10),
-                        borderRadius: BorderRadius.circular(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: _MarketplacePageState._font,
+                        fontSize: screenWidth < 360 ? 14.0 : 15.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        color: AppPalette.text(context),
                       ),
-                      child: Text(product.category,
-                          style: const TextStyle(
-                            fontFamily: _MarketplacePageState._font,
-                            color: _MarketplacePageState._red,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          )),
                     ),
-                    const Spacer(),
-                    Text('by ${product.ownerName}',
-                        style: TextStyle(
-                          fontFamily: _MarketplacePageState._font,
-                          fontSize: 10,
-                          color: AppPalette.muted(context),
-                        )),
-                  ])),
-              const SizedBox(width: 8),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                const Spacer(),
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: _MarketplacePageState._red,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: Colors.white),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _MarketplacePageState._red
+                                .withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            product.category,
+                            style: const TextStyle(
+                              fontFamily: _MarketplacePageState._font,
+                              color: _MarketplacePageState._red,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'by ${product.ownerName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: _MarketplacePageState._font,
+                              fontSize: 10.5,
+                              color: AppPalette.muted(context),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ]),
-            ]),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _MarketplacePageState._red,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ProductCard extends StatelessWidget {
