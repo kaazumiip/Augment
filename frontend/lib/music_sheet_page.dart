@@ -122,7 +122,12 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       duration: Duration(seconds: _audioDuration.ceil().clamp(1, 600)),
     );
     if (_audioAvailable) {
-      _audioReady = _initAudio();
+      // Defer audio driver setup to next frame so page transition runs at 60fps
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _audioReady = _initAudio();
+        }
+      });
     }
   }
 

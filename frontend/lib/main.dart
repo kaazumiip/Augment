@@ -18,6 +18,7 @@ import 'supabase_config.dart';
 import 'verification_code_page.dart';
 import 'welcome_name_page.dart';
 import 'app_update_prompt.dart';
+import 'sheet_score_renderer.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,8 @@ Future<void> _bootstrapApp() async {
           await FirebaseAuth.instance.currentUser?.getIdToken(),
     ),
   ]);
+  // Preload the score renderer in background so the sheet screen opens instantaneously
+  unawaited(SheetScoreRenderer.loadScriptSource());
 }
 
 Future<void> _refreshStartupAccount() async {
