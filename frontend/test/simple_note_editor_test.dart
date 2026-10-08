@@ -131,4 +131,77 @@ void main() {
     expect(find.text('Tap a note on the sheet to change it.'), findsOneWidget);
     expect(find.text('Bar 1 · C4'), findsNothing);
   });
+
+  testWidgets('can change note twice, thrice, and switch to edit other notes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'sheet_editor_tour_v3': true});
+    void Function(int)? selectCallback;
+    EditedMusicSheet? result;
+
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (ctx) => Scaffold(
+                body: TextButton(
+                    onPressed: () async {
+                      result = await Navigator.push<EditedMusicSheet>(
+                          ctx,
+                          MaterialPageRoute(
+                              builder: (_) => MusicNoteEditorPage(
+                                  musicXml: editorFixture,
+                                  osmdScriptUrl: '',
+                                  apiBaseUrls: const [],
+                                  scoreBuilder: (ctx, select) {
+                                    selectCallback = select;
+                                    return const SizedBox();
+                                  })));
+                    },
+                    child: const Text('Open editor'))))));
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+
+    // Select note 0 (C4)
+    selectCallback!(0);
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · C4'), findsOneWidget);
+
+    // 1st change: C4 -> D4
+    await tester.tap(find.text('D4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · D4'), findsOneWidget);
+
+    // 2nd change: D4 -> E4
+    await tester.tap(find.text('E4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · E4'), findsOneWidget);
+
+    // 3rd change: E4 -> F4
+    await tester.tap(find.text('F4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · F4'), findsOneWidget);
+
+    // Switch to note 2 (E4 in measure 1)
+    selectCallback!(2);
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · E4'), findsOneWidget);
+
+    // Change note 2: E4 -> G4
+    await tester.tap(find.text('G4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · G4'), findsOneWidget);
+
+    // 2nd change on note 2: G4 -> A4
+    await tester.tap(find.text('A4'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bar 1 · A4'), findsOneWidget);
+
+    // Save changes
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(result!.musicXml, contains('<step>F</step>'));
+    expect(result!.musicXml, contains('<step>A</step>'));
+    expect(tester.takeException(), isNull);
+  });
 }
+
