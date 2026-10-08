@@ -1009,8 +1009,10 @@ class _AugmentHomePageState extends State<AugmentHomePage>
   Widget _buildHomePage() {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 360;
-    // Roomy height so the Go now button and multi-line description never get cut off
-    final sheetCardHeight = isSmallScreen ? 285.0 : 310.0;
+    // The normal title/description/button stack needs more than 250px. Keep
+    // medium phone layouts roomy instead of letting the CTA overflow below
+    // the Sheet Generation card.
+    final sheetCardHeight = isSmallScreen ? 260.0 : 280.0;
     final displayName = FirebaseAuth.instance.currentUser?.displayName?.trim();
     final greetingName =
         displayName?.isNotEmpty == true ? displayName! : 'Musician';
@@ -1259,7 +1261,7 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 28),
                               _PressActionButton(
                                 isSmallScreen: isSmallScreen,
                                 onPressed: () => _openSheetGeneration(context),

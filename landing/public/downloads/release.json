@@ -1,25 +1,25 @@
 {
-  "published": "2026-10-08T16:08:02.7252786Z",
+  "published": "2026-10-08T16:20:22.8175292Z",
   "version": "1.0.32",
   "build": "33",
   "apks": {
     "x86_64": {
       "file": "augment-x86_64.apk",
       "bytes": 46109075,
-      "sha256": "39a0e89c62a7091023d2f5d2da3b216cb23cd65eff2bb3b4a788d56282c61ff0",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/39a0e89c62a7091023d2f5d2da3b216cb23cd65eff2bb3b4a788d56282c61ff0/augment-x86_64.apk"
+      "sha256": "5dfb64584d14b6b4c5e37d8dedaf17da1300902a57ce111ee952c6ebd51429da",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/5dfb64584d14b6b4c5e37d8dedaf17da1300902a57ce111ee952c6ebd51429da/augment-x86_64.apk"
     },
     "arm64-v8a": {
       "file": "augment-arm64-v8a.apk",
       "bytes": 44585715,
-      "sha256": "018adba61786eb09083c0a6cb9ac25ab642b389dd1fd091b0a446aff073c39d5",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/018adba61786eb09083c0a6cb9ac25ab642b389dd1fd091b0a446aff073c39d5/augment-arm64-v8a.apk"
+      "sha256": "e52e1dc4741a2183c2de5c56807034f9596098c296b0e7b4075ae7285775c504",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/e52e1dc4741a2183c2de5c56807034f9596098c296b0e7b4075ae7285775c504/augment-arm64-v8a.apk"
     },
     "armeabi-v7a": {
       "file": "augment-armeabi-v7a.apk",
       "bytes": 42604555,
-      "sha256": "14e31354f7ab0188aa0a331000b9bef9b1834dd45d83c255814a47e5e395226f",
-      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/14e31354f7ab0188aa0a331000b9bef9b1834dd45d83c255814a47e5e395226f/augment-armeabi-v7a.apk"
+      "sha256": "18cd5a8d6bc279c2a8bf6ebe30d2a229cdf8fb91d3a5087ee17eb8bd31fc0e5c",
+      "url": "https://xxpvzmzvlxwxkbplvilw.supabase.co/storage/v1/object/public/augment-app-downloads/18cd5a8d6bc279c2a8bf6ebe30d2a229cdf8fb91d3a5087ee17eb8bd31fc0e5c/augment-armeabi-v7a.apk"
     }
   }
 }
