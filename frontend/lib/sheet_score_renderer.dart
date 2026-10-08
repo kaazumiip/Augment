@@ -4,8 +4,21 @@ import 'package:flutter/services.dart';
 /// The score renderer travels with the APK; it needs no backend or CDN.
 class SheetScoreRenderer {
   static Future<String>? _scriptUrl;
+  static Future<String>? _scriptSource;
 
   static Future<String> loadScriptUrl() => _scriptUrl ??= _load();
+
+  static Future<String> loadScriptSource() => _scriptSource ??= _loadSource();
+
+  static Future<String> _loadSource() async {
+    try {
+      return await rootBundle
+          .loadString('assets/web/js/opensheetmusicdisplay.min.js');
+    } catch (_) {
+      _scriptSource = null;
+      rethrow;
+    }
+  }
 
   static Future<String> _load() async {
     try {
@@ -20,3 +33,4 @@ class SheetScoreRenderer {
     }
   }
 }
+

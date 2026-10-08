@@ -187,6 +187,26 @@ class GeneratedSheetsStore extends ChangeNotifier {
         inlineXml.length > 100) {
       await cacheMusicXml(outputFile: outputFile, content: inlineXml);
     }
+    final cachedAudioPath = savedResult['cached_audio_path']?.toString();
+    final audioFile = savedResult['audio_file']?.toString();
+    if (outputFile != null &&
+        outputFile.isNotEmpty &&
+        audioFile != null &&
+        audioFile.isNotEmpty &&
+        cachedAudioPath != null &&
+        cachedAudioPath.isNotEmpty) {
+      try {
+        final src = File(cachedAudioPath);
+        if (await src.exists() && await src.length() > 0) {
+          final bytes = await src.readAsBytes();
+          await cacheAudio(
+            outputFile: outputFile,
+            audioFile: audioFile,
+            bytes: bytes,
+          );
+        }
+      } catch (_) {}
+    }
     final localResult = _sheets
         .firstWhere(
           (sheet) => sheet.result['output_file']?.toString() == outputFile,

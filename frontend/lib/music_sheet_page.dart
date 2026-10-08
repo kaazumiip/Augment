@@ -128,12 +128,17 @@ class _MusicSheetPageState extends State<MusicSheetPage>
 
   Future<void> _loadScoreRenderer() async {
     try {
-      final url = await SheetScoreRenderer.loadScriptUrl();
-      if (mounted) setState(() => _scoreRendererUrl = url);
+      final source = await SheetScoreRenderer.loadScriptSource();
+      if (mounted) setState(() => _scoreRendererUrl = source);
     } catch (_) {
-      if (mounted) {
-        setState(() => _scoreRendererError =
-            'Could not load the sheet viewer. Please reopen this sheet.');
+      try {
+        final url = await SheetScoreRenderer.loadScriptUrl();
+        if (mounted) setState(() => _scoreRendererUrl = url);
+      } catch (_) {
+        if (mounted) {
+          setState(() => _scoreRendererError =
+              'Could not load the sheet viewer. Please reopen this sheet.');
+        }
       }
     }
   }
@@ -977,40 +982,42 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     }
     final permanentUrl = _permanentUrlFor(_audioFile);
     if (permanentUrl != null && permanentUrl.isNotEmpty) {
-      // Fully prepare audio on the device for responsive seek/playback rather
-      // than starting a second network stream while caching in parallel.
-      final response = await http
-          .get(Uri.parse(permanentUrl))
-          .timeout(const Duration(minutes: 3));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('Could not load saved audio (${response.statusCode}).');
-      }
-      await GeneratedSheetsStore.instance.cacheAudio(
-          outputFile: _outputFile,
-          audioFile: _audioFile,
-          bytes: response.bodyBytes);
-      final local = await GeneratedSheetsStore.instance
-          .readCachedAudioPath(_activeResult);
-      return local != null
-          ? DeviceFileSource(local)
-          : BytesSource(response.bodyBytes);
+      // Background cache the cloud file for future offline use without blocking immediate playback
+      unawaited(() async {
+        try {
+          final response = await http
+              .get(Uri.parse(permanentUrl))
+              .timeout(const Duration(minutes: 2));
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            await GeneratedSheetsStore.instance.cacheAudio(
+              outputFile: _outputFile,
+              audioFile: _audioFile,
+              bytes: response.bodyBytes,
+            );
+          }
+        } catch (_) {}
+      }());
+      return UrlSource(permanentUrl);
     }
-    final response = await http
-        .get(
-          Uri.parse(_downloadUrlFrom(baseUrl, _audioFile)),
-          headers: await _authHeaders(),
-        )
-        .timeout(const Duration(minutes: 3));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'Could not load generated audio (${response.statusCode}).');
-    }
-    await GeneratedSheetsStore.instance.cacheAudio(
-      outputFile: _outputFile,
-      audioFile: _audioFile,
-      bytes: response.bodyBytes,
-    );
-    return BytesSource(response.bodyBytes);
+    final directUrl = _downloadUrlFrom(baseUrl, _audioFile);
+    unawaited(() async {
+      try {
+        final response = await http
+            .get(
+              Uri.parse(directUrl),
+              headers: await _authHeaders(),
+            )
+            .timeout(const Duration(minutes: 2));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          await GeneratedSheetsStore.instance.cacheAudio(
+            outputFile: _outputFile,
+            audioFile: _audioFile,
+            bytes: response.bodyBytes,
+          );
+        }
+      } catch (_) {}
+    }());
+    return UrlSource(directUrl);
   }
 
   @override
@@ -1695,10 +1702,16 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     function loadScript(source) {
       return new Promise(function(resolve, reject) {
         var script = document.createElement('script');
-        script.src = source;
-        script.onload = resolve;
-        script.onerror = function() { reject(new Error('Unable to load ' + source)); };
+        if (source.startsWith('data:') || source.startsWith('http') || source.startsWith('/')) {
+          script.src = source;
+          script.onload = resolve;
+          script.onerror = function() { reject(new Error('Unable to load ' + source)); };
+        } else {
+          script.text = source;
+          resolve();
+        }
         document.head.appendChild(script);
+        if (!script.src) resolve();
       });
     }
 
