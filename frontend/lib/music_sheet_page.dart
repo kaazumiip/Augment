@@ -1192,30 +1192,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
                     ),
                   ),
                 ),
-              if (_transcriptionQuality == 'review')
-                Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.fromLTRB(
-                      isSmallScreen ? 12 : 16, 0, isSmallScreen ? 12 : 16, 10),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: brandRed.withValues(alpha: .08),
-                    border: Border.all(color: brandRed.withValues(alpha: .45)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _transcriptionWarnings.isNotEmpty
-                        ? _transcriptionWarnings.first
-                        : 'Some passages may need review before performing.',
-                    style: TextStyle(
-                      fontFamily: 'Instrument Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppPalette.text(context),
-                    ),
-                  ),
-                ),
+
               Expanded(
                 child: Container(
                   margin:
@@ -1978,6 +1955,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           ? (window.innerWidth < 420 ? 0.28 : (window.innerWidth < 768 ? 0.35 : $scoreZoom))
           : $scoreZoom;
         window.osmd.render();
+        loadingEl.style.display = 'none';
         ensurePlayhead();
         if (fullBandScore) {
           var roster = document.getElementById('bandInstrumentRoster');
@@ -2003,8 +1981,7 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           });
         }
         window.osmd.cursor.hide();
-        setTimeout(buildCursorPositions, 50);
-        loadingEl.style.display = 'none';
+        setTimeout(buildCursorPositions, 20);
       } catch (err) {
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
