@@ -42,10 +42,7 @@ try {
   Pop-Location
 }
 
-$apkSource = Join-Path $flutterProject 'build\app\outputs\apk\release'
-if (-not (Test-Path -LiteralPath $apkSource)) {
-  $apkSource = Join-Path $flutterProject 'build\app\outputs\flutter-apk'
-}
+$apkSource = Join-Path $flutterProject 'build\app\outputs\flutter-apk'
 $releaseFiles = @{
   'arm64-v8a'   = 'app-arm64-v8a-release.apk'
   'armeabi-v7a' = 'app-armeabi-v7a-release.apk'

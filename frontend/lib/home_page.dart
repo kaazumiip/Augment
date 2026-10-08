@@ -1009,8 +1009,10 @@ class _AugmentHomePageState extends State<AugmentHomePage>
   Widget _buildHomePage() {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 360;
-    // Sized to ensure the card fits comfortably in-frame above the navigation bar
-    final sheetCardHeight = isSmallScreen ? 250.0 : 265.0;
+    // The normal title/description/button stack needs more than 250px. Keep
+    // medium phone layouts roomy instead of letting the CTA overflow below
+    // the Sheet Generation card.
+    final sheetCardHeight = isSmallScreen ? 260.0 : 280.0;
     final displayName = FirebaseAuth.instance.currentUser?.displayName?.trim();
     final greetingName =
         displayName?.isNotEmpty == true ? displayName! : 'Musician';
@@ -1091,7 +1093,7 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                       },
                       child: Image.asset(
                         'assets/saxophonist.png',
-                        height: isSmallScreen ? 275 : 295,
+                        height: 340,
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
@@ -1109,8 +1111,7 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsets.only(
-                        left: 28.0, top: isSmallScreen ? 48.0 : 54.0),
+                    padding: const EdgeInsets.only(left: 28.0, top: 76.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1156,13 +1157,13 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                       ],
                     ),
                   ),
-                  SizedBox(height: isSmallScreen ? 220 : 235),
+                  const SizedBox(height: 280),
                 ],
               ),
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           // Sheet Generation Card
           AnimatedBuilder(
@@ -1260,7 +1261,7 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 28),
                               _PressActionButton(
                                 isSmallScreen: isSmallScreen,
                                 onPressed: () => _openSheetGeneration(context),
@@ -1270,7 +1271,7 @@ class _AugmentHomePageState extends State<AugmentHomePage>
                         ),
                         Positioned(
                           right: -15,
-                          top: 14,
+                          top: 20,
                           bottom: 0,
                           width: 210,
                           child: IgnorePointer(
