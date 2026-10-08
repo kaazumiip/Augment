@@ -1679,6 +1679,9 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     #loading { display: flex; align-items: center; justify-content: center; height: 200px; font-family: sans-serif; color: #888; }
     #error { display: none; padding: 16px; font-family: sans-serif; color: #c00; background: #fee; margin: 8px; border-radius: 8px; }
   </style>
+  <script>
+    $_scoreRendererUrl
+  </script>
 </head>
 <body>
   <div id="loading">Loading sheet music...</div>
@@ -1699,29 +1702,9 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     var lastAutoScrollAt = 0;
     var currentPlaybackSeconds = ${_currentPlaybackPosition.inMilliseconds / 1000};
 
-    function loadScript(source) {
-      return new Promise(function(resolve, reject) {
-        var script = document.createElement('script');
-        if (source.startsWith('data:') || source.startsWith('http') || source.startsWith('/')) {
-          script.src = source;
-          script.onload = resolve;
-          script.onerror = function() { reject(new Error('Unable to load ' + source)); };
-        } else {
-          script.text = source;
-          resolve();
-        }
-        document.head.appendChild(script);
-        if (!script.src) resolve();
-      });
-    }
-
     async function ensureOsmd() {
       if (window.opensheetmusicdisplay) return;
-      // Shipped inside the app: saved scores never wait for Railway or a CDN.
-      await loadScript(${jsonEncode(_scoreRendererUrl)});
-      if (!window.opensheetmusicdisplay) {
-        throw new Error('OpenSheetMusicDisplay did not load.');
-      }
+      throw new Error('OpenSheetMusicDisplay is initializing or not available.');
     }
 
     window.resetScoreCursor = function() {
@@ -2064,6 +2047,9 @@ class _MusicSheetPageState extends State<MusicSheetPage>
         key: ValueKey(_musicXmlContent.hashCode),
         initialData: InAppWebViewInitialData(
           data: html,
+          mimeType: 'text/html',
+          encoding: 'utf-8',
+          baseUrl: WebUri('https://localhost'),
         ),
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
@@ -2071,6 +2057,8 @@ class _MusicSheetPageState extends State<MusicSheetPage>
           builtInZoomControls: true,
           displayZoomControls: false,
           transparentBackground: true,
+          allowFileAccess: true,
+          allowContentAccess: true,
           loadWithOverviewMode: false,
           useWideViewPort: false,
         ),
