@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const GENERATION_LIMITS = Object.freeze({ free: 3, plus: 25, pro: null });
+const GENERATION_LIMITS = Object.freeze({ free: 2, plus: 18, pro: 55 });
 
 function currentMonth(now = Date.now()) {
   return new Date(now).toISOString().slice(0, 7);
@@ -20,10 +20,12 @@ function generationUsage({ userId, subscription, usage, reservations = 0, now = 
   const plan = activePlan(subscription, now);
   const limit = GENERATION_LIMITS[plan];
   const month = currentMonth(now);
-  const used = usage.filter((item) => item.userId === userId && item.month === month)
-    .reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0);
+  const monthItems = usage.filter((item) => item.userId === userId && item.month === month);
+  const used = monthItems.reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0);
+  const bandUsed = monthItems.reduce((total, item) => total + Math.max(0, Number(item.bandCount) || 0), 0);
   return {
     plan, month, used, limit, inProgress: reservations,
+    bandUsed,
     remaining: limit === null ? null : Math.max(0, limit - used - reservations),
     resetsAt: new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 1)).toISOString(),
   };

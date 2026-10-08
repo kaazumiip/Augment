@@ -5,6 +5,8 @@ import 'choose_instrument_page.dart';
 import 'band_setup_page.dart';
 import 'app_palette.dart';
 import 'app_logo.dart';
+import 'app_settings.dart';
+import 'plans_page.dart';
 
 class ChooseModePage extends StatelessWidget {
   final String source;
@@ -250,6 +252,53 @@ class ChooseModePage extends StatelessWidget {
                         description: 'Google Drive, Dropbox, OneDrive and more',
                         isSmallScreen: isSmallScreen,
                         onTap: () {
+                          if (AppSettings.instance.plan == AppPlan.free) {
+                            showDialog<void>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                title: const Text(
+                                  'Band Mode Requires Plus or Pro',
+                                  style: TextStyle(
+                                    fontFamily: 'Instrument Sans',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                content: const Text(
+                                  'Band mode is not included in the Free plan. Upgrade to Plus or Pro to transcribe multi-instrument band tracks.',
+                                  style: TextStyle(
+                                    fontFamily: 'Instrument Sans',
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const PlansPage(),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: brandRed,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('View Plans'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(

@@ -49,7 +49,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) => _AccountPageScaffold(
-        title: 'Edit profile',
+        title: 'Edit name',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

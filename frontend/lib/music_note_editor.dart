@@ -26,6 +26,19 @@ class MusicNoteEditorPage extends StatefulWidget {
   final List<String> apiBaseUrls;
   @visibleForTesting
   final Widget Function(BuildContext, ValueChanged<int>)? scoreBuilder;
+
+  static String? _cachedEditorJs;
+  static String? _cachedOsmdJs;
+
+  static Future<void> preloadScripts() async {
+    try {
+      _cachedEditorJs ??=
+          await rootBundle.loadString('assets/web/js/sheet_editor.js');
+      _cachedOsmdJs ??= await rootBundle
+          .loadString('assets/web/js/opensheetmusicdisplay.min.js');
+    } catch (_) {}
+  }
+
   @override
   State<MusicNoteEditorPage> createState() => _MusicNoteEditorPageState();
 }
@@ -65,14 +78,20 @@ class _MusicNoteEditorPageState extends State<MusicNoteEditorPage> {
 
   Future<void> _loadView() async {
     if (_loadError != null || widget.scoreBuilder != null) return;
-    String script = '';
-    String osmdScript = '';
-    try {
-      script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
-      osmdScript = await rootBundle
-          .loadString('assets/web/js/opensheetmusicdisplay.min.js');
-    } catch (_) {
-      script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
+    String script = MusicNoteEditorPage._cachedEditorJs ?? '';
+    String osmdScript = MusicNoteEditorPage._cachedOsmdJs ?? '';
+    if (script.isEmpty || osmdScript.isEmpty) {
+      try {
+        script = MusicNoteEditorPage._cachedEditorJs ??
+            await rootBundle.loadString('assets/web/js/sheet_editor.js');
+        osmdScript = MusicNoteEditorPage._cachedOsmdJs ??
+            await rootBundle
+                .loadString('assets/web/js/opensheetmusicdisplay.min.js');
+        MusicNoteEditorPage._cachedEditorJs = script;
+        MusicNoteEditorPage._cachedOsmdJs = osmdScript;
+      } catch (_) {
+        script = await rootBundle.loadString('assets/web/js/sheet_editor.js');
+      }
     }
     if (!mounted) return;
     setState(() => _html = '''<!doctype html><html><head>

@@ -380,12 +380,12 @@ class _MusicSheetPageState extends State<MusicSheetPage>
     ));
     _pendingEditedXml = edited.musicXml;
     final previousOutputFile = _outputFile;
-    _savingEditedSheet = true;
+    if (mounted) setState(() => _savingEditedSheet = true);
     Map<String, dynamic>? rendered;
     try {
       rendered = await _renderEditedScore(edited.musicXml);
     } finally {
-      _savingEditedSheet = false;
+      if (mounted) setState(() => _savingEditedSheet = false);
     }
     if (!mounted) return;
     if (rendered == null || rendered['audio_available'] != true) {
@@ -1079,146 +1079,262 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) unawaited(_leaveSheet());
       },
-      child: Scaffold(
-        backgroundColor: backgroundColor,
-        body: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 16.0 : 20.0,
-                  vertical: isSmallScreen ? 10.0 : 14.0,
-                ),
-                child: Row(
-                  children: [
-                    AppBackButton(
-                      size: isSmallScreen ? 20 : 24,
-                      onPressed: _leaveSheet,
+    final mainScaffold = Scaffold(
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 16.0 : 20.0,
+                vertical: isSmallScreen ? 10.0 : 14.0,
+              ),
+              child: Row(
+                children: [
+                  AppBackButton(
+                    size: isSmallScreen ? 20 : 24,
+                    onPressed: _leaveSheet,
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _savingToMySheets || _savedToMySheets
+                        ? null
+                        : () => _saveToMySheets(),
+                    style: TextButton.styleFrom(foregroundColor: brandRed),
+                    icon: _savingToMySheets
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _savedToMySheets
+                                ? Icons.bookmark_added_rounded
+                                : Icons.bookmark_add_outlined,
+                            size: 18),
+                    label: Text(_savedToMySheets ? 'In Sheets' : 'To Sheets',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                  TextButton.icon(
+                    onPressed: _musicXmlContent.isEmpty ? null : _editNotes,
+                    icon: const Icon(Icons.edit_note_rounded, size: 20),
+                    label: isSmallScreen
+                        ? const SizedBox.shrink()
+                        : const Text('Edit notes'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: brandRed,
+                      minimumSize: isSmallScreen ? const Size(42, 42) : null,
+                      padding: isSmallScreen
+                          ? const EdgeInsets.symmetric(horizontal: 9)
+                          : null,
                     ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _savingToMySheets || _savedToMySheets
-                          ? null
-                          : () => _saveToMySheets(),
-                      style: TextButton.styleFrom(foregroundColor: brandRed),
-                      icon: _savingToMySheets
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              _savedToMySheets
-                                  ? Icons.bookmark_added_rounded
-                                  : Icons.bookmark_add_outlined,
-                              size: 18),
-                      label: Text(_savedToMySheets ? 'In Sheets' : 'To Sheets',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                    TextButton.icon(
-                      onPressed: _musicXmlContent.isEmpty ? null : _editNotes,
-                      icon: const Icon(Icons.edit_note_rounded, size: 20),
-                      label: isSmallScreen
-                          ? const SizedBox.shrink()
-                          : const Text('Edit notes'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: brandRed,
-                        minimumSize: isSmallScreen ? const Size(42, 42) : null,
-                        padding: isSmallScreen
-                            ? const EdgeInsets.symmetric(horizontal: 9)
-                            : null,
+                  ),
+                  IconButton(
+                    tooltip: 'Download MusicXML',
+                    onPressed: _musicXmlContent.isEmpty
+                        ? null
+                        : _downloadCurrentMusicXml,
+                    color: brandRed,
+                    icon: const Icon(Icons.file_download_outlined),
+                  ),
+                ],
+              ),
+            ),
+            if (_bandViews.isNotEmpty)
+              SizedBox(
+                height: 43,
+                child: ListView.separated(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 12 : 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _bandViews.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 7),
+                  itemBuilder: (context, index) {
+                    final view = _bandViews[index];
+                    final label = index == 0
+                        ? 'Full Band'
+                        : '${view['display_name'] ?? view['instrument']} - ${_roleLabel(view['role'])}';
+                    return ChoiceChip(
+                      label: Text(label),
+                      selected: _selectedBandView == index,
+                      onSelected: (_) => _selectBandView(index),
+                      selectedColor: brandRed,
+                      labelStyle: TextStyle(
+                        color: _selectedBandView == index
+                            ? Colors.white
+                            : AppPalette.text(context),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Download MusicXML',
-                      onPressed: _musicXmlContent.isEmpty
-                          ? null
-                          : _downloadCurrentMusicXml,
-                      color: brandRed,
-                      icon: const Icon(Icons.file_download_outlined),
+                    );
+                  },
+                ),
+              ),
+            if (_bandViews.isNotEmpty) const SizedBox(height: 8),
+            if (_sourceStrategy.isNotEmpty && _selectedBandView > 0)
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.fromLTRB(
+                    isSmallScreen ? 12 : 16, 0, isSmallScreen ? 12 : 16, 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface(context),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppPalette.border(context)),
+                ),
+                child: Text(
+                  _sourceStrategy == 'matched_instrument'
+                      ? 'Detected instrument source: ${_sourceStem.replaceAll('_', ' ')}'
+                      : _sourceStrategy == 'uncertain'
+                          ? 'Low-confidence part — review or leave silent where it does not match the recording.'
+                          : 'Arranged from the ${_sourceStem.replaceAll('_', ' ')} source for this role.',
+                  style: TextStyle(
+                    fontFamily: 'Instrument Sans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: AppPalette.muted(context),
+                  ),
+                ),
+              ),
+
+            Expanded(
+              child: Container(
+                margin:
+                    EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16),
+                decoration: BoxDecoration(
+                  color: scoreSurface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                          alpha: AppPalette.isDark(context) ? .28 : .06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
+                child: sheetContent,
               ),
-              if (_bandViews.isNotEmpty)
-                SizedBox(
-                  height: 43,
-                  child: ListView.separated(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: isSmallScreen ? 12 : 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _bandViews.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 7),
-                    itemBuilder: (context, index) {
-                      final view = _bandViews[index];
-                      final label = index == 0
-                          ? 'Full Band'
-                          : '${view['display_name'] ?? view['instrument']} - ${_roleLabel(view['role'])}';
-                      return ChoiceChip(
-                        label: Text(label),
-                        selected: _selectedBandView == index,
-                        onSelected: (_) => _selectBandView(index),
-                        selectedColor: brandRed,
-                        labelStyle: TextStyle(
-                          color: _selectedBandView == index
-                              ? Colors.white
-                              : AppPalette.text(context),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      );
-                    },
+            ),
+            _buildBottomInfo(isSmallScreen),
+          ],
+        ),
+      ),
+    );
+
+    final activeBody = _savingEditedSheet
+        ? _buildEditingLoadingScreen(isSmallScreen, backgroundColor)
+        : (_isFullscreen
+            ? Scaffold(
+                backgroundColor: backgroundColor,
+                body: SafeArea(
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: scoreSurface,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: sheetContent,
                   ),
                 ),
-              if (_bandViews.isNotEmpty) const SizedBox(height: 8),
-              if (_sourceStrategy.isNotEmpty && _selectedBandView > 0)
+              )
+            : mainScaffold);
+
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_leaveSheet());
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: KeyedSubtree(
+          key: ValueKey(_savingEditedSheet ? 'editing_loading' : 'sheet_view'),
+          child: activeBody,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditingLoadingScreen(bool isSmallScreen, Color backgroundColor) {
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.fromLTRB(
-                      isSmallScreen ? 12 : 16, 0, isSmallScreen ? 12 : 16, 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  width: 76,
+                  height: 76,
                   decoration: BoxDecoration(
-                    color: AppPalette.surface(context),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppPalette.border(context)),
+                    color: brandRed.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
                   ),
-                  child: Text(
-                    _sourceStrategy == 'matched_instrument'
-                        ? 'Detected instrument source: ${_sourceStem.replaceAll('_', ' ')}'
-                        : _sourceStrategy == 'uncertain'
-                            ? 'Low-confidence part — review or leave silent where it does not match the recording.'
-                            : 'Arranged from the ${_sourceStem.replaceAll('_', ' ')} source for this role.',
-                    style: TextStyle(
-                      fontFamily: 'Instrument Sans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: AppPalette.muted(context),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3.2,
+                        valueColor: AlwaysStoppedAnimation<Color>(brandRed),
+                      ),
                     ),
                   ),
                 ),
-
-              Expanded(
-                child: Container(
-                  margin:
-                      EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16),
+                const SizedBox(height: 24),
+                Text(
+                  'Updating Music Sheet',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Instrument Sans',
+                    fontSize: isSmallScreen ? 20 : 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppPalette.text(context),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Synthesizing authentic audio playback and aligning score notes…',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Instrument Sans',
+                    fontSize: 14,
+                    color: AppPalette.muted(context),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: scoreSurface,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                            alpha: AppPalette.isDark(context) ? .28 : .06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                    color: brandRed.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.music_note_rounded,
+                          color: brandRed, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        _instrument.isNotEmpty ? _instrument : 'Solo',
+                        style: const TextStyle(
+                          fontFamily: 'Instrument Sans',
+                          color: brandRed,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
-                  child: sheetContent,
                 ),
-              ),
-              _buildBottomInfo(isSmallScreen),
-            ],
+              ],
+            ),
           ),
         ),
       ),

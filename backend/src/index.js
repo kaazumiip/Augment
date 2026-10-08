@@ -253,25 +253,66 @@ function userGenerationUsage(userId) {
     reservations: generationReservations.get(userId) || 0 });
 }
 
-function reserveGeneration(userId) {
+function reserveGeneration(userId, options = {}) {
   const usage = userGenerationUsage(userId);
-  if (usage.inProgress >= 1) return { error: 'A sheet generation is already running for this account.', status: 429, usage };
-  if (usage.remaining !== null && usage.remaining <= 0) {
-    return { error: `${usage.plan === 'free' ? 'Free' : 'Plus'} monthly sheet limit reached. Your allowance resets next month.`, status: 403, usage };
+  const mode = String(options.mode || 'solo').toLowerCase();
+  const cost = Math.max(1, Number(options.cost) || 1);
+
+  if (usage.inProgress >= 1) {
+    return { error: 'A sheet generation is already running for this account.', status: 429, usage };
   }
-  generationReservations.set(userId, usage.inProgress + 1);
+
+  if (mode === 'band') {
+    if (usage.plan === 'free') {
+      return {
+        error: 'Band mode is not included in the Free plan. Upgrade to Plus or Pro to transcribe multi-instrument band tracks.',
+        status: 403,
+        usage,
+      };
+    }
+    if (usage.plan === 'plus' && (usage.bandUsed || 0) >= 1) {
+      return {
+        error: 'Plus plan allows 1 Band mode generation per month. Upgrade to Pro for multi-instrument band generations.',
+        status: 403,
+        usage,
+      };
+    }
+  }
+
+  if (usage.remaining !== null && usage.remaining < cost) {
+    return {
+      error: `${usage.plan === 'free' ? 'Free' : usage.plan === 'plus' ? 'Plus' : 'Pro'} monthly sheet limit reached (requires ${cost} generation${cost > 1 ? 's' : ''}, ${usage.remaining} remaining). Your allowance resets next month.`,
+      status: 403,
+      usage,
+    };
+  }
+
+  generationReservations.set(userId, usage.inProgress + cost);
   return { usage };
 }
 
-function finishGeneration(userId, month, succeeded) {
+function finishGeneration(userId, month, succeeded, options = {}) {
+  const cost = Math.max(1, Number(options.cost) || 1);
+  const isBand = String(options.mode || '').toLowerCase() === 'band';
   const reserved = generationReservations.get(userId) || 0;
-  if (reserved <= 1) generationReservations.delete(userId);
-  else generationReservations.set(userId, reserved - 1);
+  if (reserved <= cost) generationReservations.delete(userId);
+  else generationReservations.set(userId, reserved - cost);
   if (!succeeded) return;
   const rows = readPrivateList(generationUsageFile);
   const record = rows.find((row) => row.userId === userId && row.month === month);
-  if (record) record.count = Math.max(0, Number(record.count) || 0) + 1;
-  else rows.push({ userId, month, count: 1 });
+  if (record) {
+    record.count = Math.max(0, Number(record.count) || 0) + cost;
+    if (isBand) {
+      record.bandCount = Math.max(0, Number(record.bandCount) || 0) + 1;
+    }
+  } else {
+    rows.push({
+      userId,
+      month,
+      count: cost,
+      ...(isBand ? { bandCount: 1 } : {}),
+    });
+  }
   writePrivateList(generationUsageFile, rows);
 }
 
@@ -1572,9 +1613,25 @@ app.post('/api/sheet/generate', requireFirebaseUser, upload.single('file'), (req
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const instrument = req.body.instrument || 'Piano';
+  const mode = req.body.mode || 'solo';
+  const instruments = req.body.instruments;
+  const timeSignature = req.body.time_signature;
+
+  let bandInstrumentCount = 1;
+  if (mode === 'band' && instruments) {
+    try {
+      const parsed = typeof instruments === 'string' ? JSON.parse(instruments) : instruments;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        bandInstrumentCount = parsed.length;
+      }
+    } catch (_) {}
+  }
+  const generationCost = mode === 'band' ? bandInstrumentCount : 1;
+
   let access;
   try {
-    access = reserveGeneration(req.userId);
+    access = reserveGeneration(req.userId, { mode, cost: generationCost });
   } catch (error) {
     fs.unlink(req.file.path, () => {});
     return res.status(503).json({ error: 'Plan usage is temporarily unavailable.' });
@@ -1585,10 +1642,6 @@ app.post('/api/sheet/generate', requireFirebaseUser, upload.single('file'), (req
   }
 
   const jobId = crypto.randomUUID();
-  const instrument = req.body.instrument || 'Piano';
-  const mode = req.body.mode || 'solo';
-  const instruments = req.body.instruments;
-  const timeSignature = req.body.time_signature;
   const isVideo = ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.3gp']
     .includes(path.extname(req.file.originalname).toLowerCase());
   generationJobs.set(jobId, {
@@ -1621,7 +1674,7 @@ app.post('/api/sheet/generate', requireFirebaseUser, upload.single('file'), (req
             'Separating vocals and instruments', progress: 5,
         }));
       const storedResult = await storeArtifactsForUser(response.data, req.userId, jobId);
-      finishGeneration(req.userId, access.usage.month, true);
+      finishGeneration(req.userId, access.usage.month, true, { mode, cost: generationCost });
       succeeded = true;
       generationJobs.set(jobId, {
         status: 'complete', result: storedResult, userId: req.userId, createdAt: Date.now(),
@@ -1632,7 +1685,7 @@ app.post('/api/sheet/generate', requireFirebaseUser, upload.single('file'), (req
         status: 'failed', error: detail, userId: req.userId, createdAt: Date.now(),
       });
     } finally {
-      if (!succeeded) finishGeneration(req.userId, access.usage.month, false);
+      if (!succeeded) finishGeneration(req.userId, access.usage.month, false, { mode, cost: generationCost });
       if (fs.existsSync(req.file.path)) fs.unlink(req.file.path, () => {});
     }
   })();
@@ -1667,13 +1720,24 @@ app.get('/api/sheet/jobs/:jobId', requireFirebaseUser, (req, res) => {
 app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
   let access;
   let succeeded = false;
+  let generationCost = 1;
+  const { url, instrument, mode = 'solo', instruments,
+    time_signature: timeSignature } = req.body;
+  if (!url) {
+    return res.status(400).json({ error: 'No URL provided' });
+  }
+
+  if (mode === 'band' && instruments) {
+    try {
+      const parsed = typeof instruments === 'string' ? JSON.parse(instruments) : instruments;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        generationCost = parsed.length;
+      }
+    } catch (_) {}
+  }
+
   try {
-    const { url, instrument, mode = 'solo', instruments,
-      time_signature: timeSignature } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'No URL provided' });
-    }
-    access = reserveGeneration(req.userId);
+    access = reserveGeneration(req.userId, { mode, cost: generationCost });
     if (access.error) return res.status(access.status).json({ error: access.error, usage: access.usage });
 
     const isYouTube = /(?:youtube\.com|youtu\.be)/.test(url);
@@ -1693,7 +1757,7 @@ app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
         }));
       const jobId = crypto.randomUUID();
       const stored = await storeArtifactsForUser(response.data, req.userId, jobId);
-      finishGeneration(req.userId, access.usage.month, true);
+      finishGeneration(req.userId, access.usage.month, true, { mode, cost: generationCost });
       succeeded = true;
       return res.json(stored);
     }
@@ -1722,7 +1786,7 @@ app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
     fs.unlink(filepath, () => {});
     const jobId = crypto.randomUUID();
     const stored = await storeArtifactsForUser(result.data, req.userId, jobId);
-    finishGeneration(req.userId, access.usage.month, true);
+    finishGeneration(req.userId, access.usage.month, true, { mode, cost: generationCost });
     succeeded = true;
     res.json(stored);
   } catch (error) {
@@ -1735,7 +1799,7 @@ app.post('/api/sheet/generate-url', requireFirebaseUser, async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   } finally {
-    if (access && !access.error && !succeeded) finishGeneration(req.userId, access.usage.month, false);
+    if (access && !access.error && !succeeded) finishGeneration(req.userId, access.usage.month, false, { mode, cost: generationCost });
   }
 });
 
@@ -1774,10 +1838,28 @@ app.get('/api/sheet/download/:filename', requireFirebaseUser, async (req, res) =
       if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         return res.status(404).json({ error: 'Generated file expired or was not found.' });
       }
+      const userUsage = userGenerationUsage(req.userId);
+      const isFreePlan = userUsage.plan === 'free';
+      if (path.extname(filename).toLowerCase() === '.pdf' && isFreePlan) {
+        try {
+          const pyRes = await pythonRequest('get', `/api/sheet/download/${encodeURIComponent(filename)}?watermark=true`, {
+            responseType: 'arraybuffer', timeout: 30000,
+          });
+          const bytes = Buffer.from(pyRes.data);
+          if (bytes.subarray(0, 5).toString() === '%PDF-') {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            return res.send(bytes);
+          }
+        } catch (_) {}
+      }
       return res.download(filePath, filename);
     }
     console.log(`[Node] Download request: ${req.params.filename}`);
-    const response = await pythonRequest('get', `/api/sheet/download/${req.params.filename}`, {
+    const userUsage = userGenerationUsage(req.userId);
+    const isFree = userUsage.plan === 'free';
+    const watermarkQuery = isFree && path.extname(req.params.filename).toLowerCase() === '.pdf' ? '?watermark=true' : '';
+    const response = await pythonRequest('get', `/api/sheet/download/${req.params.filename}${watermarkQuery}`, {
       responseType: 'stream'
     });
 

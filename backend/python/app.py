@@ -3451,6 +3451,33 @@ def download_sheet(filename):
         print(f'[download] filename={filename}, file_path={file_path}, exists={os.path.exists(file_path)}')
         if os.path.exists(file_path):
             ext = os.path.splitext(filename)[1].lower()
+            watermark = request.args.get('watermark', '').lower() in ('1', 'true', 'yes')
+            if ext == '.pdf' and watermark:
+                try:
+                    import pymupdf
+                    doc = pymupdf.open(file_path)
+                    for page in doc:
+                        w, h = page.rect.width, page.rect.height
+                        text = 'Created with Augment'
+                        # Subtle, tasteful watermark at bottom center
+                        page.insert_text(
+                            pymupdf.Point(max(20, (w - 180) / 2), h - 25),
+                            text,
+                            fontsize=12,
+                            color=(0.55, 0.55, 0.55),
+                        )
+                    pdf_bytes = doc.tobytes()
+                    doc.close()
+                    import io
+                    return send_file(
+                        io.BytesIO(pdf_bytes),
+                        mimetype='application/pdf',
+                        as_attachment=True,
+                        download_name=secure_filename(filename),
+                    )
+                except Exception as w_err:
+                    print(f'[download] Watermark stamping error: {w_err}')
+
             mime_map = {
                 '.wav': 'audio/wav',
                 '.mp3': 'audio/mpeg',
@@ -3613,15 +3640,7 @@ def render_edited_sheet():
             )
 
         notes_data = _extract_notes_data(score, instrument_name)
-        sheet_prefix = os.path.join(OUTPUT_FOLDER, f'{stem}_edited_sheet')
-        sheet_image_path, png_generated = render_musicxml_to_png(
-            output_path, sheet_prefix)
-        sheet_image_filename = (os.path.basename(sheet_image_path)
-                                if png_generated and sheet_image_path else None)
-        sheet_pdf_path = sheet_prefix + '.pdf'
-        pdf_generated = os.path.isfile(sheet_pdf_path)
-        sheet_pdf_filename = (os.path.basename(sheet_pdf_path)
-                              if pdf_generated else None)
+        sheet_pdf_filename = f'{stem}.pdf'
         return jsonify({
             'success': True,
             'instrument': instrument_name,
@@ -3636,10 +3655,10 @@ def render_edited_sheet():
             'tempo': tempo_bpm,
             'key_signature': key_sig,
             'time_signature': time_sig,
-            'sheet_image': sheet_image_filename if png_generated else None,
-            'sheet_image_available': png_generated,
-            'pdf_file': sheet_pdf_filename if pdf_generated else None,
-            'pdf_available': pdf_generated,
+            'sheet_image': None,
+            'sheet_image_available': False,
+            'pdf_file': sheet_pdf_filename,
+            'pdf_available': True,
         })
     except Exception as exc:
         print(f'[render_edited_sheet] Failed: {exc}')

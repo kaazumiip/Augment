@@ -19,6 +19,7 @@ import 'verification_code_page.dart';
 import 'welcome_name_page.dart';
 import 'app_update_prompt.dart';
 import 'sheet_score_renderer.dart';
+import 'music_note_editor.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,8 +46,9 @@ Future<void> _bootstrapApp() async {
           await FirebaseAuth.instance.currentUser?.getIdToken(),
     ),
   ]);
-  // Preload the score renderer in background so the sheet screen opens instantaneously
+  // Preload the score renderer and note editor scripts in background so opening is instantaneous
   unawaited(SheetScoreRenderer.loadScriptSource());
+  unawaited(MusicNoteEditorPage.preloadScripts());
 }
 
 Future<void> _refreshStartupAccount() async {

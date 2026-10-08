@@ -102,58 +102,6 @@ class ChooseTunerInstrumentPage extends StatefulWidget {
         {'note': 'E', 'octave': 4, 'freq': 329.63},
       ],
     ),
-    // Wind instruments
-    TunerInstrument(
-      name: 'Alto Saxophone',
-      subtitle: 'Eb Alto Sax',
-      category: 'Wind',
-      imagePath: 'assets/saxophonist.png',
-      isRedCard: true,
-      isChromatic: true,
-      minMidi: 49,
-      maxMidi: 81,
-      writtenPitchOffset: 9,
-      preferFlats: true,
-      strings: [
-        {'note': 'Bb', 'octave': 3, 'freq': 233.08},
-        {'note': 'Eb', 'octave': 4, 'freq': 311.13},
-        {'note': 'Ab', 'octave': 4, 'freq': 415.30},
-        {'note': 'Db', 'octave': 5, 'freq': 554.37},
-      ],
-    ),
-    TunerInstrument(
-      name: 'Tenor Saxophone',
-      subtitle: 'Bb Tenor Sax',
-      category: 'Wind',
-      imagePath: 'assets/saxophonist.png',
-      isRedCard: false,
-      isChromatic: true,
-      minMidi: 44,
-      maxMidi: 76,
-      writtenPitchOffset: 14,
-      preferFlats: true,
-      strings: [
-        {'note': 'Ab', 'octave': 2, 'freq': 103.83},
-        {'note': 'Db', 'octave': 3, 'freq': 138.59},
-        {'note': 'Gb', 'octave': 3, 'freq': 185.00},
-        {'note': 'B', 'octave': 3, 'freq': 246.94},
-      ],
-    ),
-    TunerInstrument(
-      name: 'Flute',
-      subtitle: 'Concert Flute',
-      category: 'Wind',
-      isRedCard: true,
-      isChromatic: true,
-      minMidi: 60,
-      maxMidi: 96,
-      strings: [
-        {'note': 'C', 'octave': 4, 'freq': 261.63},
-        {'note': 'D', 'octave': 4, 'freq': 293.66},
-        {'note': 'E', 'octave': 4, 'freq': 329.63},
-        {'note': 'F', 'octave': 4, 'freq': 349.23},
-      ],
-    ),
   ];
 
   @override

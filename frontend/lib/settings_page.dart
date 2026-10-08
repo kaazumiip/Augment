@@ -40,7 +40,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (updated == true && mounted) {
       setState(() {});
-      _message('Profile updated.');
+      _message('Name updated.');
     }
   }
 
@@ -79,7 +79,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit profile'),
+        title: const Text('Edit name'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -358,10 +358,10 @@ class _SettingsPageState extends State<SettingsPage> {
             _group(border, [
               _SettingsTile(
                 icon: Icons.person_rounded,
-                title: 'Edit profile',
+                title: 'Edit name',
                 subtitle: _user?.displayName?.isNotEmpty == true
                     ? _user!.displayName!
-                    : 'Change your name and profile',
+                    : 'Change your name',
                 onTap: _openEditProfile,
               ),
               _SettingsTile(
