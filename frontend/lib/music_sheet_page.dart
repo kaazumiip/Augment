@@ -1074,11 +1074,6 @@ class _MusicSheetPageState extends State<MusicSheetPage>
       );
     }
 
-    return PopScope(
-      canPop: _allowPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) unawaited(_leaveSheet());
-      },
     final mainScaffold = Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
