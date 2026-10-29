@@ -1,258 +1,213 @@
-<p align="center">
-  <img src="docs/screenshots/app_icon.png" width="110" alt="Augment App Icon"/>
-</p>
+# Augment — AI Sheet Music Generator, Practice Suite & Musician Community
 
-<h1 align="center">Augment — AI-Powered Music Workstation & Community Platform</h1>
-
-<p align="center">
-  <strong>Real-Time Instrument Tuning • Visual Pulse Metronome • AI Audio-to-Sheet Transcription • Interactive Score Editor • Musician Social Hub & Marketplace</strong>
-</p>
+> **Create. Practice. Perform.**
+> **Augment** is an all-in-one AI-powered music practice, sheet music generation, and social platform built with **Flutter**, **Node.js**, **Python (Basic Pitch / Librosa / Demucs / Music21)**, **Firebase Authentication**, and **Supabase**.
 
 ---
 
-## 📖 Complete Application Overview (`APP_DETAILS`)
+## App Overview & Core Architecture
 
-**Augment** is an all-in-one mobile music ecosystem engineered in Flutter with a hybrid Node.js and Python AI backend. It empowers solo musicians, bands, educators, and composers to tune instruments with sub-cent accuracy, practice with a multi-chromatic visual pulse metronome, automatically transcribe raw audio recordings into editable sheet music (Solo & Multi-Instrument Band modes), and buy/sell original arrangements in a community-driven marketplace.
+Augment combines AI audio-to-score transcription, precision real-time practice utilities, and a musician marketplace/community into a unified mobile experience:
+
+1. **AI Sheet Music Generation (`sheet_generation_page.dart`, `music_sheet_page.dart`)** — Upload any audio recording (`.mp3`, `.wav`, `.m4a`, `.flac`) from your device to transcribe it into playable **Solo** or **Multi-Instrument Band** sheet music (MusicXML, Interactive Score Viewer, and PDF export).
+2. **Interactive Chromatic Tuner (`choose_tuner_instrument_page.dart`, `tuner_page.dart`)** — Real-time microphone pitch detection (`Auto` & `Manual` string-lock modes) with custom headstock peg overlays and cent-deviation gauges (`TOO LOW` / `TOO HIGH`) for Guitar, Ukulele, Violin, Bass, Electric Guitar, and Wind/Brass instruments.
+3. **Tactile Rotary Metronome (`metronome_page.dart`)** — High-precision audio scheduling engine with a 360-degree interactive tempo dial (`20–240 BPM`), `Tap for beat` tempo detector, visual pulse timeline, and subdivision controls.
+4. **Vocal Range & Pitch Detection (`voice_range_page.dart`, `pitch_detector_page.dart`)** — Dedicated tools to map your comfortable singing range and identify live musical notes on a 12-semitone chromatic wheel.
+5. **Musician Community & Marketplace (`social_page.dart`, `marketplace_page.dart`, `social_profile_page.dart`)** — Share photos, videos, polls, and audio clips, follow creators, message musicians, and browse/sell original music, sheet music, and lyrics.
 
 ---
 
-## 📱 Full UI Display Gallery & Screen-by-Screen Breakdown
+## Complete App Screen Showcase (Captured Live via `scrcpy`)
 
-### 1. Live Device Workspace (`scrcpy` Capture on Galaxy Z Fold 4)
-Captured live from physical hardware, demonstrating Augment's responsive layout engine across standard smartphones, compact screens, and unfolded foldable displays:
+Every screen below is a **full-page live app screenshot** captured directly from the running Android app over `scrcpy`.
+
+### Quick Screen Overview
+
+| Home (Light) | Home (Dark) | Sheet Generation | Other Tools Hub |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/page_01_home.png" width="200" alt="Home Page Light"/> | <img src="docs/screenshots/page_01b_home_dark.png" width="200" alt="Home Page Dark"/> | <img src="docs/screenshots/page_06_sheet_generation.png" width="200" alt="Sheet Generation Page"/> | <img src="docs/screenshots/page_07_tools_hub.png" width="200" alt="Other Tools Page"/> |
+| **Choose Instrument** | **Guitar Tuner** | **Violin Tuner** | **Metronome** |
+| <img src="docs/screenshots/page_10_choose_tuner_instrument.png" width="200" alt="Choose Tuner Instrument"/> | <img src="docs/screenshots/page_11_tuner_guitar.png" width="200" alt="Guitar Tuner Page"/> | <img src="docs/screenshots/page_11b_tuner_violin.png" width="200" alt="Violin Tuner Page"/> | <img src="docs/screenshots/page_08_metronome.png" width="200" alt="Metronome Page"/> |
+| **Voice Pitch Test** | **Pitch Detector** | **Community Feed** | **Social Profile** |
+| <img src="docs/screenshots/page_12_voice_pitch.png" width="200" alt="Voice Pitch Page"/> | <img src="docs/screenshots/page_13_pitch_detector.png" width="200" alt="Pitch Detector Page"/> | <img src="docs/screenshots/page_02_community.png" width="200" alt="Community Page"/> | <img src="docs/screenshots/page_09_social_profile.png" width="200" alt="Social Profile Page"/> |
+| **Marketplace** | **My Saved Sheets** | **Settings (Light & Dark)** | **Plans & Billing** |
+| <img src="docs/screenshots/page_03_marketplace.png" width="200" alt="Marketplace Page"/> | <img src="docs/screenshots/page_04_saved_sheets.png" width="200" alt="Saved Sheets Page"/> | <img src="docs/screenshots/page_05_settings.png" width="200" alt="Settings Page"/> | <img src="docs/screenshots/page_14_plans_billing.png" width="200" alt="Plans Page"/> |
+
+---
+
+## Detailed Page-by-Page Breakdown
+
+### 1. Home Dashboard (`frontend/lib/home_page.dart`)
+
+| Light Mode (`page_01_home.png`) | Dark Mode (`page_01b_home_dark.png`) |
+| :---: | :---: |
+| <img src="docs/screenshots/page_01_home.png" width="300" alt="Home Page Light Mode"/> | <img src="docs/screenshots/page_01b_home_dark.png" width="300" alt="Home Page Dark Mode"/> |
+
+- **Personalized Header & Profile Shortcut**: Displays a time-aware greeting (`Good Morning, <Name>`) with the brand tagline (`CREATE. PRACTICE. PERFORM.`) and a top-left profile avatar that opens the user's `SocialProfilePage`.
+- **Featured Sheet Generation Hero Card**: Animated crimson gradient card with a `"Go now"` CTA that launches the AI audio-to-sheet transcription pipeline (`SheetGenerationPage`). Also hosts a live fluid-wave progress banner whenever a background transcription job is running.
+- **Other Tools Interactive Carousel**: Horizontal `PageView` carousel giving one-tap access to **Metronome**, **Tuner**, **Voice pitch test**, and **Pitch detector**, plus a `"See all >"` button to open the full `ToolsPage` list.
+- **Animated Notched Bottom Navigation Bar**: Custom-painted bottom bar (`_NavBarPainter`) with 5 main tabs: **Home**, **Community**, **Marketplace**, **My Sheets**, and **Settings**.
+
+---
+
+### 2. AI Sheet Music Generation (`frontend/lib/sheet_generation_page.dart`)
 
 <p align="center">
-  <img src="docs/screenshots/scrcpy_latest.png" width="460" alt="Live App Capture via scrcpy"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/01_active_screen.png" width="460" alt="Fold 4 Active Screen"/>
-  <br>
-  <em>Live device captures running on Samsung Galaxy Z Fold 4 via scrcpy.</em>
+  <img src="docs/screenshots/page_06_sheet_generation.png" width="300" alt="Sheet Generation Page"/>
 </p>
+
+- **Audio Upload Workflow (`Upload from device`)**: Lets musicians pick any audio file from local storage to convert into sheet music.
+- **Solo vs. Band Mode Selection**: After selecting an audio file, users choose between **Solo Mode** (single instrument transcription across 12 supported instruments) or **Band Mode** (AI stem separation via Demucs + multi-part score generation).
+- **Asynchronous Background Processing**: Sends the audio to the Node.js + Python transcription service (`Basic Pitch` + `Librosa` + `Music21`) and tracks real-time percentage progress on the Home screen banner until the interactive score (`MusicSheetPage`) is ready.
 
 ---
 
-### 2. Brand Identity, Splash & Companion Mascot (`splash_screen.dart`, `animated_mascot.dart`)
-
-- **Vector & Animated Splash (`vector_splash_screen.dart`, `augment_logo_motion.dart`)**: Smooth entry animation with automatic light/dark mode detection and persistent session restoration.
-- **Interactive Companion Mascot (`animated_mascot.dart`)**: An animated musical mascot that reacts to user actions, onboarding steps, and transcription progress with custom poses (`Default`, `Wink`, `Wave`, `Hop`, `Crouch`).
+### 3. Other Tools Hub (`frontend/lib/tools_page.dart`)
 
 <p align="center">
-  <img src="docs/screenshots/augment_logo.png" width="220" alt="Augment Logo Light"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/augment_logo_dark.png" width="220" alt="Augment Logo Dark"/>
+  <img src="docs/screenshots/page_07_tools_hub.png" width="300" alt="Other Tools Hub Page"/>
 </p>
+
+- **Dedicated Practice Utilities Directory**: Accessible via `"See all >"` on the Home screen, presenting full-width cards for all 4 core practice utilities:
+  1. **METRONOME** — *"Stay in sync. Choose a tempo, start the beat, and focus on the music."*
+  2. **Tuner** — *"Tune your instrument accurately before you play."*
+  3. **Voice pitch test** — *"Test and explore your vocal range."*
+  4. **Pitch detector** — *"Identify pitch from a recorded sound."*
+
+---
+
+### 4. Interactive Instrument Selector & Chromatic Tuner (`frontend/lib/choose_tuner_instrument_page.dart` & `frontend/lib/tuner_page.dart`)
+
+| Choose Instrument (`page_10_choose_tuner_instrument.png`) | Guitar 6-String Tuner (`page_11_tuner_guitar.png`) | Violin Tuner (`page_11b_tuner_violin.png`) |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/page_10_choose_tuner_instrument.png" width="260" alt="Choose Tuner Instrument Page"/> | <img src="docs/screenshots/page_11_tuner_guitar.png" width="260" alt="Guitar 6-String Tuner Page"/> | <img src="docs/screenshots/page_11b_tuner_violin.png" width="260" alt="Violin Tuner Page"/> |
+
+- **Instrument Category Filter (`choose_tuner_instrument_page.dart`)**: Filterable visual cards (`All`, `String`, `Wind`, `Brass`) for **Guitar 6-String**, **Ukulele 4-String**, **Violin**, **Electric Guitar**, **Bass**, and more.
+- **Auto & Manual String Lock (`tuner_page.dart`)**:
+  - **Auto Mode**: Automatically detects which string is being plucked and highlights its corresponding peg badge (`E2`, `A2`, `D3`, `G3`, `B3`, `E4` for Guitar; `G3`, `D4`, `A4`, `E5` for Violin).
+  - **Manual Mode**: Tap any string badge around the headstock to lock the target frequency for focused single-string tuning.
+- **Real-Time Cent Deviation Ruler**: Displays the detected note in bold typography, string label (`6th string · low E2`), and a horizontal flat (`b`) to sharp (`#`) ruler (`TOO LOW` / `TOO HIGH`) with responsive layout scaling for both standard phones and foldable displays.
+
+---
+
+### 5. Tactile Metronome (`frontend/lib/metronome_page.dart`)
 
 <p align="center">
-  <img src="docs/screenshots/08_augment_mascot.png" width="140" alt="Mascot Default"/>
-  <img src="docs/screenshots/mascot_wink.png" width="140" alt="Mascot Wink"/>
-  <img src="docs/screenshots/mascot_wave.png" width="140" alt="Mascot Wave"/>
-  <img src="docs/screenshots/mascot_hop.png" width="140" alt="Mascot Hop"/>
-  <img src="docs/screenshots/mascot_crouch.png" width="140" alt="Mascot Crouch"/>
-  <br>
-  <em>Interactive Mascot Animation States: Idle, Wink, Wave, Hop, and Crouch.</em>
+  <img src="docs/screenshots/page_08_metronome.png" width="300" alt="Metronome Page"/>
 </p>
 
----
-
-### 3. Authentication & Onboarding Flow (`login_page.dart`, `verification_code_page.dart`, `welcome_name_page.dart`)
-
-- **Multi-Channel Sign-In (`login_page.dart`)**: Supports email/password, phone number authentication, and single-tap Google OAuth (`auth_service.dart`).
-- **OTP Verification (`verification_code_page.dart`)**: 6-digit verification code screen with auto-advance focus and resend timer.
-- **Profile Onboarding (`welcome_name_page.dart`, `profile_photo_adjust_page.dart`)**: Guides new musicians through setting their stage name, bio, and interactive circular avatar cropping.
-
-<p align="center">
-  <img src="docs/screenshots/ui_login.png" width="420" alt="Login Hero Screen"/>
-  <br>
-  <em>Onboarding & Authentication Hero Display.</em>
-</p>
+- **Interactive Rotary BPM Dial**: Circular red ring dial displaying the active tempo (`150 BPM`) with a draggable indicator dot and central Play/Pause button.
+- **Tap for Beat (`Tap for beat`)**: Top-right button calculates average BPM in real time from consecutive user taps.
+- **Visual Beat Waveform & Settings**: Bottom tick-bar visualizer pulses in sync with the audio click track, while the bottom-right gear button opens time signature and subdivision settings.
 
 ---
 
-### 4. Multi-Instrument Precision Tuner (`tuner_page.dart`, `choose_tuner_instrument_page.dart`)
+### 6. Voice Pitch Test & Chromatic Pitch Detector (`frontend/lib/voice_range_page.dart` & `frontend/lib/pitch_detector_page.dart`)
 
-- **Sub-Cent Pitch Detection (`tuner_detector.dart`, `tuner_pitch.dart`, `tuner_audio.dart`)**: Real-time autocorrelation pitch detection processing live microphone input with noise gating.
-- **Pitch Deviation Meter**: Displays `TOO LOW` (`b`) to `TOO HIGH` (`#`) across a ±50 cent scale. The note readout (`E2`, `A2`, `D3`, `G3`, `B3`, `E4`) transitions from Brand Red (`#BA0007`) to Forest Green (`#23834D`) when locked in tune.
-- **Auto & Manual String Locking**: Musicians can let the tuner auto-detect the nearest string or tap any string button to lock the target pitch.
-- **Interactive Headstock Visuals**: Custom coordinate-mapped headstocks with glowing peg highlights and pointer lines connecting the active string button to its physical tuning key.
+| Voice Pitch Test (`page_12_voice_pitch.png`) | Pitch Detector (`page_13_pitch_detector.png`) |
+| :---: | :---: |
+| <img src="docs/screenshots/page_12_voice_pitch.png" width="300" alt="Voice Pitch Test Page"/> | <img src="docs/screenshots/page_13_pitch_detector.png" width="300" alt="Pitch Detector Page"/> |
 
-#### Tuner Meter & Headstock Collection
-<p align="center">
-  <img src="docs/screenshots/ui_tuner.png" width="480" alt="Tuner Pitch Meter"/>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/03_guitar_headstock.png" width="170" alt="Acoustic Guitar Headstock"/>
-  <img src="docs/screenshots/head_electric_guitar.png" width="170" alt="Electric Guitar Headstock"/>
-  <img src="docs/screenshots/head_bass.png" width="170" alt="Bass Guitar Headstock"/>
-  <img src="docs/screenshots/head_ukulele.png" width="170" alt="Ukulele Headstock"/>
-  <img src="docs/screenshots/head_violin.png" width="170" alt="Violin Headstock"/>
-  <br>
-  <em>Interactive Headstocks: Acoustic 6-String, Electric Guitar, 4-String Bass, Ukulele, and Violin.</em>
-</p>
+- **Voice Range Finder (`voice_range_page.dart`)**: Guides singers through a smooth vocal glide from their lowest comfortable note to their highest note (`Start voice test`) and computes their vocal range classification.
+- **Chromatic Note Wheel (`pitch_detector_page.dart`)**: Features a 12-note circular pitch wheel (`C`, `C#`, `D`, `D#`, `E`, `F`, `F#`, `G`, `G#`, `A`, `A#`, `B`), live note readout card, and microphone level meter (`Start listening`) to identify any sung or played note immediately.
 
 ---
 
-### 5. Instrument Selection Library (`choose_instrument_page.dart`, `instrument_selection_card.dart`)
+### 7. Musician Community & Social Profile (`frontend/lib/social_page.dart` & `frontend/lib/social_profile_page.dart`)
 
-Used across both the **Chromatic/String Tuner** and **AI Sheet Transcription** workflows, featuring custom visual cards for 12+ string, keyboard, woodwind, and brass instruments:
+| Community Feed (`page_02_community.png`) | User Social Profile (`page_09_social_profile.png`) |
+| :---: | :---: |
+| <img src="docs/screenshots/page_02_community.png" width="300" alt="Community Page"/> | <img src="docs/screenshots/page_09_social_profile.png" width="300" alt="Social Profile Page"/> |
 
-<p align="center">
-  <img src="docs/screenshots/inst_guitar.png" width="130" alt="Guitar"/>
-  <img src="docs/screenshots/inst_electric_guitar.png" width="130" alt="Electric Guitar"/>
-  <img src="docs/screenshots/inst_bass.png" width="130" alt="Bass Guitar"/>
-  <img src="docs/screenshots/inst_ukulele.png" width="130" alt="Ukulele"/>
-  <img src="docs/screenshots/inst_violin.png" width="130" alt="Violin"/>
-  <img src="docs/screenshots/inst_cello.png" width="130" alt="Cello"/>
-</p>
-<p align="center">
-  <img src="docs/screenshots/inst_piano.png" width="130" alt="Piano"/>
-  <img src="docs/screenshots/inst_saxophone.png" width="130" alt="Saxophone"/>
-  <img src="docs/screenshots/inst_trumpet.png" width="130" alt="Trumpet"/>
-  <img src="docs/screenshots/inst_flute.png" width="130" alt="Flute"/>
-  <img src="docs/screenshots/inst_clarinet.png" width="130" alt="Clarinet"/>
-  <img src="docs/screenshots/inst_french_horn.png" width="130" alt="French Horn"/>
-  <br>
-  <em>Full Instrument Library: Guitar, Electric Guitar, Bass, Ukulele, Violin, Cello, Piano, Saxophone, Trumpet, Flute, Clarinet, and French Horn.</em>
-</p>
+- **Community Feed & Post Composer (`social_page.dart`)**:
+  - Top action bar with Direct Messages (`social_messages_page.dart`), Friend Requests, Notifications, and Search.
+  - Multi-format post composer supporting **Photo**, **Video**, **Poll**, and **Audio** posts.
+- **Musician Profile (`social_profile_page.dart`)**:
+  - Displays user avatar, handle (`@serene`), **Followers / Following** counters, customizable bio, **Edit profile** / **Share profile** actions, and tabs for **All posts** and **Music market** listings.
 
 ---
 
-### 6. Haptic Visual Metronome (`metronome_page.dart`, `tap_tempo_page.dart`)
+### 8. Marketplace & My Saved Sheets (`frontend/lib/marketplace_page.dart` & `frontend/lib/saved_sheets_page.dart`)
 
-- **Interactive Tempo Dial (`_TempoDial`)**: Supports 1 to 320 BPM with a draggable rotary marker, central large BPM typography, and a fine-grain bottom slider (`_TempoSlider`).
-- **Multi-Chromatic Beat Ripple Engine (`_BeatPulsePainter`)**: Releases expanding rainbow wave rings on every beat, with heightened stroke weight on accented downbeats.
-- **Tap Tempo & Time Signatures**: Switch to `Tap for beat` mode to calculate BPM from live finger taps, and configure numerator/denominator time signatures (`4/4`, `3/4`, `6/8`, etc.), beat subdivisions, and click sound styles.
+| Music Marketplace (`page_03_marketplace.png`) | My Sheets Library (`page_04_saved_sheets.png`) |
+| :---: | :---: |
+| <img src="docs/screenshots/page_03_marketplace.png" width="300" alt="Marketplace Page"/> | <img src="docs/screenshots/page_04_saved_sheets.png" width="300" alt="My Saved Sheets Page"/> |
 
-<p align="center">
-  <img src="docs/screenshots/ui_metronome.png" width="460" alt="Metronome Module"/>
-  <br>
-  <em>Visual Pulse Metronome with rotary dial, ripple wave canvas, and tempo slider.</em>
-</p>
-
----
-
-### 7. Pitch Detector & Vocal Range Analyzer (`pitch_detector_page.dart`, `voice_range_page.dart`)
-
-- **Live Frequency & Note Readout (`pitch_detector_page.dart`)**: Displays detected Hz frequency, musical note name, octave, and stability graph in real time.
-- **Vocal Range Finder (`voice_range_page.dart`)**: Step-by-step guided vocal test capturing the user's lowest chest note and highest head/falsetto note, mapping their voice classification (Bass, Baritone, Tenor, Alto, Mezzo-Soprano, Soprano).
-
-<p align="center">
-  <img src="docs/screenshots/ui_pitch_detector.png" width="380" alt="Pitch Detector & Wind/Vocal Guidance"/>
-  <br>
-  <em>Pitch Detection & Wind/Vocal Performance Analyzer.</em>
-</p>
+- **Marketplace (`marketplace_page.dart`)**:
+  - Browse and publish creator listings across three categories: **Music**, **Music sheet**, and **Lyrics**.
+  - Includes seller profile shortcuts, shopping cart drawer, search bar, and a floating `+` button to list new items.
+- **My Sheets (`saved_sheets_page.dart`)**:
+  - Personal library storing all AI-generated solo and band scores for offline viewing, playback, and PDF export.
 
 ---
 
-### 8. AI Sheet Music Generation & Interactive Note Editor (`choose_mode_page.dart`, `sheet_generation_page.dart`, `music_sheet_page.dart`, `music_note_editor.dart`)
+### 9. Settings, Dark Mode & Subscription Plans (`frontend/lib/settings_page.dart`)
 
-- **Solo vs. Band Mode (`choose_mode_page.dart`, `band_setup_page.dart`)**:
-  - **Solo Mode**: Transcribes a single instrument recording or uploaded audio file into clean standard notation.
-  - **Band Mode**: Configures multi-instrument parts (`band_part.dart`), separates audio stems, and generates synchronized multi-part scores.
-- **Interactive Score Renderer & Note Editor (`music_sheet_page.dart`, `music_note_editor.dart`, `sheet_score_renderer.dart`)**:
-  - Tap any notehead on the rendered sheet to change its pitch, accidental, or duration multiple times seamlessly.
-  - Interactive walkthrough (`sheet_editor_walkthrough.dart`) guides first-time editors.
-  - Built-in MIDI playback with seek guard (`sheet_playback_seek_guard.dart`) and real-time measure highlighting.
-- **PDF Preview & Export (`pdf_preview_page.dart`, `sheet_artifact_service.dart`)**: Generates print-ready vector PDF scores and MusicXML files.
+| Settings Light (`page_05_settings.png`) | Settings Dark (`page_05b_settings_dark.png`) | Plans & Billing (`page_14_plans_billing.png`) |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/page_05_settings.png" width="260" alt="Settings Light Mode"/> | <img src="docs/screenshots/page_05b_settings_dark.png" width="260" alt="Settings Dark Mode"/> | <img src="docs/screenshots/page_14_plans_billing.png" width="260" alt="Plans and Billing Page"/> |
 
-<p align="center">
-  <img src="docs/screenshots/ui_solo_mode.png" width="180" alt="Solo Mode"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/ui_band_mode.png" width="240" alt="Band Mode"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/ui_sheet_editor.png" width="360" alt="Interactive Sheet Music Editor"/>
-  <br>
-  <em>Solo Mode, Band Mode, and Interactive Sheet Music View & Note Editor.</em>
-</p>
+- **Account & General Settings (`settings_page.dart`)**:
+  - Manage display name (`Edit name`), password (`Change your password` with email verification code), account email, `Plans & billing`, `Manage plan`, `Saved posts`, `Dark mode` toggle, and `Font size` (`Small`, `Medium`, `Large`).
+- **Subscription Tiers (`Plans & billing`)**:
+  - **Free (`$0 forever` — Starter)**: 2 Solo music sheet generations/month, exported PDF with Augment watermark, full instrument tuner & metronome access.
+  - **Plus (`$2.99 / month` — Most Popular)**: 18 Solo music sheet generations/month, Band mode access, and watermark-free PDF exports.
+  - **Pro (`$5.99 / month`)**: High-volume Solo & Band sheet music generations, priority AI transcription queue, and full studio export suite.
 
 ---
 
-### 9. Subscription Plans & Quota Management (`plans_page.dart`, `manage_plan_page.dart`)
+## Complete Frontend Module Map (`frontend/lib/`)
 
-Transparent tier system tailored to musicians' transcription needs:
-- **Free Plan**: Provides **2 Solo** music sheet generations per month. Exported PDFs include the **Augment** watermark; Band mode is not included.
-- **Plus Plan (\$2.99 / month)**: Provides **18 Solo** music sheet generations per month **without a watermark**, plus **1 Band mode** allowance (billed according to the number of instruments in the sheet).
-- **Pro Plan (\$5.99 / month)**: Provides **55 music sheet generations** per month **without a watermark**, shared flexibly between Solo and Band mode (each Band mode generation deducts credits equal to the number of instruments in the score, e.g., 2 instruments = 2 generations).
-
----
-
-### 10. Community Hub, Social Feed & Messaging (`social_page.dart`, `create_post_page.dart`, `messages_page.dart`)
-
-- **Musician Feed (`social_page.dart`, `comments_page.dart`)**: Share sheet music arrangements, audio clips, polls, and status updates. Includes distraction-free post creation (`create_post_page.dart`) and expanding search (`social_search_page.dart`).
-- **Artist Profiles (`social_profile_page.dart`, `edit_bio_page.dart`, `saved_posts_page.dart`)**: Custom bio, followers/following lists, friend requests (`friend_requests_page.dart`), and bookmarked posts.
-- **Real-Time Direct Messaging (`messages_page.dart`, `notifications_page.dart`)**: Chat with fellow musicians, share images, and receive instant activity notifications.
-
----
-
-### 11. Sheet Music Marketplace & Creator Payouts (`marketplace_page.dart`, `seller_dashboard_page.dart`, `khqr_checkout_view.dart`)
-
-- **Morphing Search & Discovery (`morphing_search_bar.dart`, `marketplace_page.dart`)**: Smoothly expanding search bar with neutral focus styling and responsive product cards designed to fit compact 320px screens up to tablets without text clipping.
-- **Listing Creation & Seller Dashboard (`create_marketplace_listing_page.dart`, `seller_dashboard_page.dart`, `seller_payout_page.dart`)**: Publish original sheet music with custom cover art, set pricing, track sales analytics, and request payouts.
-- **Bakong KHQR Checkout (`khqr_checkout_view.dart`, `bakong_payment_service.dart`, `marketplace_Purchases_page.dart`)**: Instant QR code payment generation and verification for purchasing scores.
-
-<p align="center">
-  <img src="docs/screenshots/ui_marketplace.png" width="540" alt="Sheet Music Marketplace"/>
-  <br>
-  <em>Augment Sheet Music Marketplace Banner & Storefront.</em>
-</p>
+| File | Screen / Role |
+| :--- | :--- |
+| [`main.dart`](frontend/lib/main.dart) | App entry point, Firebase initialization, theme & font-scale provider |
+| [`vector_splash_screen.dart`](frontend/lib/vector_splash_screen.dart) | Animated vector splash screen on startup |
+| [`login_page.dart`](frontend/lib/login_page.dart) | Email/Password, Google OAuth, and Guest authentication screen |
+| [`home_page.dart`](frontend/lib/home_page.dart) | Main dashboard, hero sheet generation card, tools carousel, and notched bottom nav |
+| [`sheet_generation_page.dart`](frontend/lib/sheet_generation_page.dart) | Audio file uploader (`Upload from device`) for AI sheet music transcription |
+| [`choose_instrument_page.dart`](frontend/lib/choose_instrument_page.dart) | Solo/Band instrument selector for AI sheet generation |
+| [`music_sheet_page.dart`](frontend/lib/music_sheet_page.dart) | Interactive sheet music viewer, playback synth, and PDF exporter |
+| [`saved_sheets_page.dart`](frontend/lib/saved_sheets_page.dart) | `My sheets` tab storing generated music sheets |
+| [`tools_page.dart`](frontend/lib/tools_page.dart) | `Other tools` directory page (Metronome, Tuner, Voice Pitch, Pitch Detector) |
+| [`choose_tuner_instrument_page.dart`](frontend/lib/choose_tuner_instrument_page.dart) | `CHOOSE INSTRUMENT` picker for the chromatic tuner |
+| [`tuner_page.dart`](frontend/lib/tuner_page.dart) | Real-time `Auto`/`Manual` chromatic tuner with headstock string locking |
+| [`metronome_page.dart`](frontend/lib/metronome_page.dart) | Rotary BPM dial metronome with `Tap for beat` and pulse timeline |
+| [`voice_range_page.dart`](frontend/lib/voice_range_page.dart) | `Find your voice range` vocal glide test |
+| [`pitch_detector_page.dart`](frontend/lib/pitch_detector_page.dart) | 12-note circular pitch wheel detector |
+| [`social_page.dart`](frontend/lib/social_page.dart) | Community feed with Photo, Video, Poll, and Audio posts |
+| [`social_profile_page.dart`](frontend/lib/social_profile_page.dart) | User social profile, follower stats, bio, and user market listings |
+| [`social_messages_page.dart`](frontend/lib/social_messages_page.dart) | Direct messaging inbox and real-time chat threads |
+| [`marketplace_page.dart`](frontend/lib/marketplace_page.dart) | Creator marketplace for Music, Music Sheets, and Lyrics |
+| [`settings_page.dart`](frontend/lib/settings_page.dart) | Account settings, Dark Mode, Font Size, and Subscription Plans (`Free` / `Plus` / `Pro`) |
 
 ---
 
-## 🏗️ Complete Module Map (`frontend/lib/`)
+## Local Development Setup
 
-| Module Category | Source Files | Detailed Responsibility |
-| :--- | :--- | :--- |
-| **Core & Theme** | `main.dart`, `home_page.dart`, `app_palette.dart`, `app_settings.dart`, `api_config.dart`, `supabase_config.dart`, `app_update_prompt.dart` | Theme management (Light/Dark), neutral input focus borders, API routing, OTA APK update checks, and bottom navigation shell. |
-| **Splash & Mascot** | `splash_screen.dart`, `vector_splash_screen.dart`, `splash_pan_route.dart`, `augment_logo_motion.dart`, `app_logo.dart`, `animated_mascot.dart` | Vector logo animations, custom page transitions, and interactive bunny mascot states. |
-| **Authentication** | `login_page.dart`, `verification_code_page.dart`, `welcome_name_page.dart`, `auth_service.dart`, `firebase_options.dart` | Email, Phone OTP, and Google Sign-In flows with session persistence. |
-| **Instrument Tuner** | `tuner_page.dart`, `choose_tuner_instrument_page.dart`, `tuner_audio.dart`, `tuner_detector.dart`, `tuner_pitch.dart`, `tuner_sheet.dart` | Live mic capture, pitch detection, cent deviation meter, and coordinate-mapped headstock peg overlays. |
-| **Metronome & Pitch** | `metronome_page.dart`, `metronome_sheet.dart`, `tap_tempo_page.dart`, `pitch_detector_page.dart`, `pitch_detector_sheet.dart`, `pitch_tester_sheet.dart`, `voice_range_page.dart`, `tools_page.dart` | Low-latency audio click pools, concentric beat ripples, tap tempo, and vocal range classification. |
-| **AI Sheet Generation & Editor** | `choose_mode_page.dart`, `choose_instrument_page.dart`, `band_setup_page.dart`, `band_part.dart`, `sheet_generation_page.dart`, `generation_started_page.dart`, `loading_page.dart`, `music_sheet_page.dart`, `music_note_editor.dart`, `sheet_score_renderer.dart`, `sheet_edit_document.dart`, `pdf_preview_page.dart`, `saved_sheets_page.dart` | Solo/Band audio transcription, interactive multi-tap note editing, MIDI playback cursor, and watermark/clean PDF export. |
-| **Social Network** | `social_page.dart`, `social_profile_page.dart`, `social_search_page.dart`, `create_post_page.dart`, `comments_page.dart`, `messages_page.dart`, `friend_requests_page.dart`, `notifications_page.dart`, `saved_posts_page.dart` | Community posts, polls, comments, direct messages, friend system, and notifications. |
-| **Marketplace & Payments** | `marketplace_page.dart`, `create_marketplace_listing_page.dart`, `marketplace_purchases_page.dart`, `seller_dashboard_page.dart`, `seller_payout_page.dart`, `khqr_checkout_view.dart`, `bakong_payment_service.dart`, `plans_page.dart`, `manage_plan_page.dart` | Sheet music storefront, seller analytics, subscription tiers (Free/Plus/Pro), and Bakong KHQR payments. |
-
----
-
-## ⚙️ Local Development & Build Instructions
-
-### 1. Start the Python AI Transcription Server (Port 5000)
+### 1. Start Python Audio Transcription Service (Port `5000`)
 ```powershell
-.\backend\python\start.bat
-```
-*(Or manually activate `.\backend\python\venv311\Scripts\Activate.ps1` and run `python app.py`)*
-
-### 2. Start the Node.js API Server (Port 3000)
-```powershell
-.\backend\start.bat
+cd backend\python
+.\venv311\Scripts\Activate.ps1
+python app.py
 ```
 
-### 3. Run the Flutter Mobile App
-Debugging on a USB-connected Android device uses `adb reverse` and defaults to `http://127.0.0.1:3000` (or `http://10.0.2.2:3000` on the Android emulator):
+### 2. Start Node.js API Server (Port `3000`)
+```powershell
+cd backend
+npm install
+npm run dev
+```
+
+### 3. Run Flutter App on Connected Android Device (`scrcpy` / `adb`)
 ```powershell
 cd frontend
 flutter pub get
-flutter run
-```
-
-### 4. Build Signed Release APKs
-```powershell
-.\scripts\build_android_release.ps1 -Publish
+flutter run --dart-define=API_BASE_URL=http://<YOUR_LOCAL_LAN_IP>:3000
 ```
 
 ---
 
-## 🗄️ Database Migrations
+## GitHub Terms of Service & Open-Source Compliance
 
-The ordered SQL migrations are located in `supabase/migrations`. To link and push to a Supabase project:
-```powershell
-supabase link --project-ref YOUR_PROJECT_REF
-supabase db push
-```
-
----
-
-## 🛡️ GitHub Terms of Service & Compliance Statement
-
-- **No Secrets or Credentials**: All API URLs, keys, and tokens are injected at build/runtime via environment variables (`--dart-define` / `.env`) and are never hardcoded in source documentation.
-- **Original & Authorized Assets**: All UI screenshots, mascot illustrations, and instrument graphics are original project assets created for Augment.
-- **Community Standards**: This documentation and repository strictly adhere to GitHub's Acceptable Use Policies and Terms of Service.
+- **No Secrets or Credentials**: All environment variables (`.env`, Firebase/Supabase service keys, Stripe secrets) are excluded via `.gitignore`. Only safe `.env.example` templates are tracked.
+- **Authentic First-Party Screenshots**: Every UI image in `docs/screenshots/page_*.png` is a genuine full-screen capture taken directly from the Augment application running on Android via `scrcpy`.
